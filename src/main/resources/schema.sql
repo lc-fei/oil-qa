@@ -1,5 +1,12 @@
 DROP TABLE IF EXISTS sys_login_log;
 DROP TABLE IF EXISTS sys_operation_log;
+DROP TABLE IF EXISTS qa_daily_stat;
+DROP TABLE IF EXISTS sys_exception_log;
+DROP TABLE IF EXISTS qa_ai_call_record;
+DROP TABLE IF EXISTS qa_prompt_record;
+DROP TABLE IF EXISTS qa_graph_record;
+DROP TABLE IF EXISTS qa_nlp_record;
+DROP TABLE IF EXISTS qa_request;
 DROP TABLE IF EXISTS kg_import_task;
 DROP TABLE IF EXISTS kg_version;
 DROP TABLE IF EXISTS kg_relation_type;
@@ -75,6 +82,140 @@ CREATE TABLE sys_operation_log (
     KEY idx_operation_user_id (user_id),
     KEY idx_module_name (module_name),
     KEY idx_operated_at (operated_at)
+);
+
+CREATE TABLE qa_request (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    trace_id VARCHAR(64) DEFAULT NULL,
+    user_id BIGINT DEFAULT NULL,
+    user_account VARCHAR(50) DEFAULT NULL,
+    question TEXT NOT NULL,
+    request_source VARCHAR(20) NOT NULL DEFAULT 'CLIENT_WEB',
+    request_status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+    final_answer LONGTEXT DEFAULT NULL,
+    answer_summary TEXT DEFAULT NULL,
+    total_duration_ms INT DEFAULT NULL,
+    graph_hit TINYINT NOT NULL DEFAULT 0,
+    ai_call_status VARCHAR(20) DEFAULT NULL,
+    exception_flag TINYINT NOT NULL DEFAULT 0,
+    request_uri VARCHAR(255) DEFAULT NULL,
+    request_method VARCHAR(20) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME DEFAULT NULL,
+    CONSTRAINT uk_qa_request_no UNIQUE (request_no),
+    KEY idx_qa_request_trace_id (trace_id),
+    KEY idx_qa_request_user_id (user_id),
+    KEY idx_qa_request_status (request_status),
+    KEY idx_qa_request_source (request_source),
+    KEY idx_qa_request_graph_hit (graph_hit),
+    KEY idx_qa_request_exception_flag (exception_flag),
+    KEY idx_qa_request_created_at (created_at)
+);
+
+CREATE TABLE qa_nlp_record (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    tokenize_result TEXT DEFAULT NULL,
+    keyword_list TEXT DEFAULT NULL,
+    entity_list TEXT DEFAULT NULL,
+    intent VARCHAR(100) DEFAULT NULL,
+    confidence DECIMAL(6,4) DEFAULT NULL,
+    raw_result LONGTEXT DEFAULT NULL,
+    duration_ms INT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_qa_nlp_request_no (request_no)
+);
+
+CREATE TABLE qa_graph_record (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    query_condition TEXT DEFAULT NULL,
+    hit_entity_list LONGTEXT DEFAULT NULL,
+    hit_relation_list LONGTEXT DEFAULT NULL,
+    hit_property_summary LONGTEXT DEFAULT NULL,
+    result_count INT NOT NULL DEFAULT 0,
+    valid_hit TINYINT NOT NULL DEFAULT 0,
+    duration_ms INT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_qa_graph_request_no (request_no),
+    KEY idx_qa_graph_valid_hit (valid_hit)
+);
+
+CREATE TABLE qa_prompt_record (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    original_question TEXT NOT NULL,
+    graph_summary TEXT DEFAULT NULL,
+    prompt_summary TEXT DEFAULT NULL,
+    prompt_content LONGTEXT DEFAULT NULL,
+    generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    duration_ms INT DEFAULT NULL,
+    KEY idx_qa_prompt_request_no (request_no),
+    KEY idx_qa_prompt_generated_at (generated_at)
+);
+
+CREATE TABLE qa_ai_call_record (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    model_name VARCHAR(100) DEFAULT NULL,
+    provider VARCHAR(100) DEFAULT NULL,
+    call_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ai_call_status VARCHAR(20) NOT NULL DEFAULT 'FAILED',
+    response_status_code INT DEFAULT NULL,
+    result_summary TEXT DEFAULT NULL,
+    error_message VARCHAR(500) DEFAULT NULL,
+    retry_count INT NOT NULL DEFAULT 0,
+    duration_ms INT DEFAULT NULL,
+    KEY idx_qa_ai_call_request_no (request_no),
+    KEY idx_qa_ai_call_status (ai_call_status),
+    KEY idx_qa_ai_call_time (call_time)
+);
+
+CREATE TABLE sys_exception_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    exception_no VARCHAR(64) NOT NULL,
+    request_no VARCHAR(64) DEFAULT NULL,
+    trace_id VARCHAR(64) DEFAULT NULL,
+    exception_module VARCHAR(100) NOT NULL,
+    exception_level VARCHAR(20) NOT NULL DEFAULT 'ERROR',
+    exception_type VARCHAR(100) NOT NULL,
+    exception_message VARCHAR(500) DEFAULT NULL,
+    stack_trace LONGTEXT DEFAULT NULL,
+    request_uri VARCHAR(255) DEFAULT NULL,
+    request_method VARCHAR(20) DEFAULT NULL,
+    request_param_summary TEXT DEFAULT NULL,
+    context_info LONGTEXT DEFAULT NULL,
+    handle_status VARCHAR(20) NOT NULL DEFAULT 'UNHANDLED',
+    handle_remark VARCHAR(500) DEFAULT NULL,
+    handler_id BIGINT DEFAULT NULL,
+    handler_name VARCHAR(50) DEFAULT NULL,
+    occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    handled_at DATETIME DEFAULT NULL,
+    CONSTRAINT uk_sys_exception_no UNIQUE (exception_no),
+    KEY idx_sys_exception_request_no (request_no),
+    KEY idx_sys_exception_trace_id (trace_id),
+    KEY idx_sys_exception_module (exception_module),
+    KEY idx_sys_exception_level (exception_level),
+    KEY idx_sys_exception_handle_status (handle_status),
+    KEY idx_sys_exception_occurred_at (occurred_at)
+);
+
+CREATE TABLE qa_daily_stat (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    stat_date DATE NOT NULL,
+    request_count INT NOT NULL DEFAULT 0,
+    success_count INT NOT NULL DEFAULT 0,
+    fail_count INT NOT NULL DEFAULT 0,
+    exception_count INT NOT NULL DEFAULT 0,
+    avg_response_time_ms DECIMAL(12,2) NOT NULL DEFAULT 0,
+    p95_response_time_ms DECIMAL(12,2) NOT NULL DEFAULT 0,
+    graph_hit_count INT NOT NULL DEFAULT 0,
+    ai_call_count INT NOT NULL DEFAULT 0,
+    ai_fail_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_daily_stat_date UNIQUE (stat_date)
 );
 
 CREATE TABLE kg_entity_type (

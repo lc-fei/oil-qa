@@ -28,6 +28,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class Neo4jGraphRepository {
 
+    // 图谱事实查询统一收敛在该仓储中，避免服务层直接拼装 Cypher。
     private final Driver neo4jDriver;
     private final Neo4jProperties neo4jProperties;
 
@@ -78,6 +79,7 @@ public class Neo4jGraphRepository {
         params.put("keyword", keyword);
         params.put("limit", limit);
         if (StringUtils.hasText(typeCode)) {
+            // 下拉搜索允许按类型进一步收窄结果，便于关系创建和可视化选择中心实体。
             cypher.append(" AND n.typeCode = $typeCode");
             params.put("typeCode", typeCode);
         }
@@ -354,6 +356,7 @@ public class Neo4jGraphRepository {
     }
 
     public List<GraphRelationRecord> findRelationsForVisualization(String entityId, String name, String typeCode, String relationTypeCode, int level) {
+        // 可视化查询先确定中心实体，再围绕中心节点做有限层级扩散，避免返回过大子图。
         GraphEntityRecord center = StringUtils.hasText(entityId) ? findEntityById(entityId) : findEntityByName(name);
         if (center == null) {
             return Collections.emptyList();
@@ -362,6 +365,7 @@ public class Neo4jGraphRepository {
         params.put("entityId", center.getId());
         params.put("typeCode", StringUtils.hasText(typeCode) ? typeCode : null);
         params.put("relationTypeCode", StringUtils.hasText(relationTypeCode) ? relationTypeCode : null);
+        // 当前管理端可视化实际只开放 1~2 层，避免 Neo4j 查询成本和前端渲染压力失控。
         params.put("level", Math.max(1, Math.min(level, 2)));
         String cypher = """
                 MATCH p = (center:GraphEntity {id: $entityId})-[rels:GRAPH_RELATION*1..2]-(n:GraphEntity)
