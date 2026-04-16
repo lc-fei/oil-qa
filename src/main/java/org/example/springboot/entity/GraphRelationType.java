@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 图谱关系类型定义对象。
+ */
 public class GraphRelationType {
 
     private Long id;

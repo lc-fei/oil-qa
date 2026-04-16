@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * AI 调用监控明细记录。
+ */
 public class MonitorAiCallRecord {
 
     private Long id;

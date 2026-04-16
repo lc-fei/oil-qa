@@ -7,6 +7,9 @@ import lombok.Data;
 import java.util.List;
 
 @Data
+/**
+ * 批量更新异常日志处理状态的请求参数。
+ */
 public class ExceptionLogBatchHandleStatusRequest {
 
     @NotEmpty(message = "exceptionIds不能为空")

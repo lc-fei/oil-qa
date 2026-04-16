@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * 运行监控请求详情响应对象。
+ */
 public class MonitorRequestDetailResponse {
 
     private String requestId;

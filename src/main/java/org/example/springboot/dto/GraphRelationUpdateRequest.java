@@ -6,6 +6,9 @@ import lombok.Data;
 import java.util.Map;
 
 @Data
+/**
+ * 图谱关系编辑请求对象。
+ */
 public class GraphRelationUpdateRequest {
 
     @NotBlank(message = "relationTypeCode不能为空")

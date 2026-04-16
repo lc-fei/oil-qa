@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
+/**
+ * 高频问题统计项。
+ */
 public class MonitorTopQuestionResponse {
 
     private String question;

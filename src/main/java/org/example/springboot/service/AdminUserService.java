@@ -7,6 +7,9 @@ import org.example.springboot.dto.UserPageQuery;
 import org.example.springboot.dto.UserUpdateRequest;
 import org.example.springboot.entity.PageResponse;
 
+/**
+ * 管理端用户管理服务接口。
+ */
 public interface AdminUserService {
 
     PageResponse<UserListItemResponse> pageUsers(UserPageQuery query);

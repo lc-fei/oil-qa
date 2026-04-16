@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
+/**
+ * 图谱导入失败行明细对象。
+ */
 public class GraphImportErrorRowResponse {
 
     private Integer rowNum;

@@ -6,6 +6,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
+/**
+ * 用户信息对象。
+ */
 public class User {
 
     private Long id;

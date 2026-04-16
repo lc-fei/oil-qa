@@ -13,6 +13,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱导出服务实现。
+ */
 public class GraphExportServiceImpl implements GraphExportService {
 
     private final Neo4jGraphRepository neo4jGraphRepository;

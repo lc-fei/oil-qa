@@ -6,6 +6,9 @@ import lombok.Data;
 import java.util.Map;
 
 @Data
+/**
+ * 图谱实体新增或编辑请求对象。
+ */
 public class GraphEntitySaveRequest {
 
     @NotBlank(message = "name不能为空")

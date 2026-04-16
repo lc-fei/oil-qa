@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 图谱类型与通用下拉选项接口。
+ */
 @RestController
 @RequestMapping("/api/admin/graph")
 @RequiredArgsConstructor

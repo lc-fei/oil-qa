@@ -29,6 +29,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱关系管理服务实现，当前关系事实数据统一读写 Neo4j。
+ */
 public class GraphRelationServiceImpl implements GraphRelationService {
 
     private final Neo4jGraphRepository neo4jGraphRepository;

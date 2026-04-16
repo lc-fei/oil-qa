@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 问答请求主链路监控记录。
+ */
 public class MonitorRequestRecord {
 
     private Long id;

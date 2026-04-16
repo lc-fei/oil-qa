@@ -9,6 +9,9 @@ import org.neo4j.driver.AuthTokens;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.GraphDatabase;
 
+/**
+ * 应用级基础 Bean 配置，集中管理加密器和 Neo4j 驱动等通用组件。
+ */
 @Configuration
 @EnableConfigurationProperties({JwtProperties.class, AuthProperties.class, Neo4jProperties.class})
 public class AppConfig {

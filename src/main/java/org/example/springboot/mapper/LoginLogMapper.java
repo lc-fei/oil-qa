@@ -4,6 +4,9 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.example.springboot.entity.LoginLog;
 
+/**
+ * 登录日志表 Mapper。
+ */
 @Mapper
 public interface LoginLogMapper {
 

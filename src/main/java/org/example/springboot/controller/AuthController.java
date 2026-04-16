@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 统一认证接口，覆盖登录、退出、当前用户和密码修改能力。
+ */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor

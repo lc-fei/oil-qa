@@ -15,6 +15,9 @@ import org.example.springboot.entity.MonitorRequestRecord;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 运行监控模块 MyBatis Mapper。
+ */
 @Mapper
 public interface MonitorMapper {
 

@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 图谱实体节点的持久化对象。
+ */
 public class GraphEntityRecord {
 
     private String id;

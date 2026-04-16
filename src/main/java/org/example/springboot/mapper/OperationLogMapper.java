@@ -4,6 +4,9 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.example.springboot.entity.OperationLog;
 
+/**
+ * 后台操作日志表 Mapper。
+ */
 @Mapper
 public interface OperationLogMapper {
 

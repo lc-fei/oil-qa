@@ -7,6 +7,9 @@ import org.example.springboot.dto.LoginResponse;
 import org.example.springboot.dto.UserInfoResponse;
 import org.example.springboot.entity.User;
 
+/**
+ * 认证与当前用户相关服务接口。
+ */
 public interface UserService {
 
     LoginResponse login(LoginRequest request, HttpServletRequest httpServletRequest);

@@ -8,6 +8,9 @@ import lombok.Data;
 import java.util.List;
 
 @Data
+/**
+ * 管理端新增用户请求对象。
+ */
 public class UserCreateRequest {
 
     @NotBlank(message = "username不能为空")

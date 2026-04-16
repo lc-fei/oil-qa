@@ -7,6 +7,9 @@ import org.example.springboot.dto.GraphRelationPageQuery;
 import org.example.springboot.dto.GraphRelationUpdateRequest;
 import org.example.springboot.entity.ListPageResponse;
 
+/**
+ * 图谱关系管理服务接口。
+ */
 public interface GraphRelationService {
 
     ListPageResponse<GraphRelationListItemResponse> pageRelations(GraphRelationPageQuery query);

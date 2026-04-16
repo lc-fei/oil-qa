@@ -9,6 +9,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * 全局异常处理器，统一收敛参数校验异常和业务异常的返回结构。
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

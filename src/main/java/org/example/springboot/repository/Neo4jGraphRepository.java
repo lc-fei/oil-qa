@@ -26,6 +26,9 @@ import java.util.Map;
 
 @Repository
 @RequiredArgsConstructor
+/**
+ * Neo4j 图谱读写仓储，集中封装 Cypher 组装与结果映射逻辑。
+ */
 public class Neo4jGraphRepository {
 
     // 图谱事实查询统一收敛在该仓储中，避免服务层直接拼装 Cypher。

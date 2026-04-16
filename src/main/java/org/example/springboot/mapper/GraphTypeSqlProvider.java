@@ -4,6 +4,9 @@ import org.apache.ibatis.jdbc.SQL;
 import org.example.springboot.dto.GraphTypeQuery;
 import org.springframework.util.StringUtils;
 
+/**
+ * 图谱类型分页与筛选 SQL 构造器。
+ */
 public class GraphTypeSqlProvider {
 
     public String buildEntityTypeList(GraphTypeQuery query) {

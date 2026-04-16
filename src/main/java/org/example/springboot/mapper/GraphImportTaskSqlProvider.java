@@ -4,6 +4,9 @@ import org.apache.ibatis.jdbc.SQL;
 import org.example.springboot.dto.GraphImportTaskPageQuery;
 import org.springframework.util.StringUtils;
 
+/**
+ * 图谱导入任务分页查询 SQL 构造器。
+ */
 public class GraphImportTaskSqlProvider {
 
     public String buildCount(GraphImportTaskPageQuery query) {

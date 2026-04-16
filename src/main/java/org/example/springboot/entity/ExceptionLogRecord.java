@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 异常日志表对应的持久化对象。
+ */
 public class ExceptionLogRecord {
 
     private Long id;

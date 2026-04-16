@@ -9,6 +9,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 用户详情响应对象。
+ */
 public class UserDetailResponse {
 
     private Long id;

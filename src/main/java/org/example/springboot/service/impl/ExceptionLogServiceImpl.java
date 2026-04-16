@@ -26,6 +26,9 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 异常日志模块服务实现，负责日志查询与处理状态流转。
+ */
 public class ExceptionLogServiceImpl implements ExceptionLogService {
 
     // 异常日志模块当前只负责读和处理状态更新，异常写入仍需后续埋点接入。

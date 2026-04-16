@@ -9,6 +9,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 图谱可视化查询接口。
+ */
 @RestController
 @RequestMapping("/api/admin/graph/visualization")
 @RequiredArgsConstructor

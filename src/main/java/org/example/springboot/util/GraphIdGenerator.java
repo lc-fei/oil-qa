@@ -4,6 +4,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * 图谱业务 ID 生成工具，用于实体和关系的前缀化编号生成。
+ */
 public final class GraphIdGenerator {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");

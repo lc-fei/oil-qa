@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
+/**
+ * 登录接口请求参数。
+ */
 public class LoginRequest {
 
     @NotBlank(message = "account不能为空")

@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
+/**
+ * 运行监控首页总览响应对象。
+ */
 public class MonitorOverviewResponse {
 
     private Long totalQaCount;

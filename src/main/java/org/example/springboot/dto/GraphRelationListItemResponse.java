@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * 图谱关系列表项响应对象。
+ */
 public class GraphRelationListItemResponse {
 
     private String id;

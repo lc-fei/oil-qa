@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 管理端角色查询接口。
+ */
 @RestController
 @RequestMapping("/api/admin/roles")
 @RequiredArgsConstructor

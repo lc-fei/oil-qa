@@ -8,6 +8,9 @@ import java.util.Map;
 
 @Getter
 @Builder
+/**
+ * NLP 解析链路监控详情响应对象。
+ */
 public class MonitorNlpDetailResponse {
 
     private String requestId;

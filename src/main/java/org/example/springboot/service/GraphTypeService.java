@@ -8,6 +8,9 @@ import org.example.springboot.dto.GraphTypeSaveRequest;
 
 import java.util.List;
 
+/**
+ * 图谱类型管理服务接口。
+ */
 public interface GraphTypeService {
 
     List<GraphTypeResponse> listEntityTypes(GraphTypeQuery query);

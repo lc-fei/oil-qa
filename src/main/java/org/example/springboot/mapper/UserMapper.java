@@ -15,6 +15,9 @@ import org.example.springboot.entity.User;
 
 import java.util.List;
 
+/**
+ * 用户主表 Mapper。
+ */
 @Mapper
 public interface UserMapper {
 

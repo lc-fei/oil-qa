@@ -9,6 +9,9 @@ import java.util.Map;
 
 @Getter
 @Builder
+/**
+ * 图谱关系详情响应对象。
+ */
 public class GraphRelationDetailResponse {
 
     private String id;

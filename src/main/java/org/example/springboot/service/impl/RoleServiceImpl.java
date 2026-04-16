@@ -11,6 +11,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 角色查询服务实现。
+ */
 public class RoleServiceImpl implements RoleService {
 
     private final RoleMapper roleMapper;

@@ -31,6 +31,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱实体管理服务实现，当前实体事实数据统一读写 Neo4j。
+ */
 public class GraphEntityServiceImpl implements GraphEntityService {
 
     private final GraphEntityTypeMapper graphEntityTypeMapper;

@@ -8,6 +8,9 @@ import java.util.Map;
 
 @Getter
 @Builder
+/**
+ * 异常日志详情响应对象。
+ */
 public class ExceptionLogDetailResponse {
 
     private String exceptionId;

@@ -15,6 +15,9 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * JWT 令牌生成与解析组件。
+ */
 @Component
 public class JwtTokenProvider {
 

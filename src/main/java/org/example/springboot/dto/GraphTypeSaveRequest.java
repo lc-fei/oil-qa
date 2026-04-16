@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
+/**
+ * 图谱类型新增或编辑请求对象。
+ */
 public class GraphTypeSaveRequest {
 
     @NotBlank(message = "typeCode不能为空")

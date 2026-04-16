@@ -12,6 +12,9 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 后台操作日志写入服务实现。
+ */
 public class OperationLogServiceImpl implements OperationLogService {
 
     private final OperationLogMapper operationLogMapper;

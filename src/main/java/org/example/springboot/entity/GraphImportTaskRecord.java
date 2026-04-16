@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 图谱导入任务记录对象。
+ */
 public class GraphImportTaskRecord {
 
     private Long id;

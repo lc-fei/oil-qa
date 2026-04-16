@@ -2,6 +2,9 @@ package org.example.springboot.common;
 
 import lombok.Getter;
 
+/**
+ * 系统统一错误码枚举，供业务异常和接口返回复用。
+ */
 @Getter
 public enum ErrorCode {
     SUCCESS(200, "success"),

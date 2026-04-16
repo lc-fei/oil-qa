@@ -4,6 +4,9 @@ import org.example.springboot.dto.UserPageQuery;
 import org.apache.ibatis.jdbc.SQL;
 import org.springframework.util.StringUtils;
 
+/**
+ * 用户管理列表筛选 SQL 构造器。
+ */
 public class UserSqlProvider {
 
     public String buildCountUsers(UserPageQuery query) {

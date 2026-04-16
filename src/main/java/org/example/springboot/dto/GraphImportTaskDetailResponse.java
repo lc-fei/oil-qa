@@ -9,6 +9,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 图谱导入任务详情响应对象。
+ */
 public class GraphImportTaskDetailResponse {
 
     private Long taskId;

@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * Prompt 构建过程监控明细记录。
+ */
 public class MonitorPromptRecord {
 
     private Long id;

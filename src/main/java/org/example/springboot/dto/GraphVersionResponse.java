@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * 图谱版本响应对象。
+ */
 public class GraphVersionResponse {
 
     private Long id;

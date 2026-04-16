@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * 异常日志列表项响应对象。
+ */
 public class ExceptionLogListItemResponse {
 
     private String exceptionId;

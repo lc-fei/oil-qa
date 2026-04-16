@@ -11,6 +11,9 @@ import org.example.springboot.entity.ListPageResponse;
 
 import java.util.List;
 
+/**
+ * 图谱实体管理服务接口。
+ */
 public interface GraphEntityService {
 
     ListPageResponse<GraphEntityListItemResponse> pageEntities(GraphEntityPageQuery query);

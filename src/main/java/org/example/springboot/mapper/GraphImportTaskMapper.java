@@ -12,6 +12,9 @@ import org.example.springboot.entity.GraphImportTaskRecord;
 
 import java.util.List;
 
+/**
+ * 图谱导入任务表 Mapper。
+ */
 @Mapper
 public interface GraphImportTaskMapper {
 

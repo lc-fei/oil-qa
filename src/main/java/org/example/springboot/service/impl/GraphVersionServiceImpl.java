@@ -12,6 +12,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱版本管理服务实现。
+ */
 public class GraphVersionServiceImpl implements GraphVersionService {
 
     private final GraphVersionMapper graphVersionMapper;

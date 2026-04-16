@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 登录日志记录对象。
+ */
 public class LoginLog {
 
     private Long id;

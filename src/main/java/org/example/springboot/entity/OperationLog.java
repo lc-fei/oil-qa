@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 管理端操作日志记录对象。
+ */
 public class OperationLog {
 
     private Long id;

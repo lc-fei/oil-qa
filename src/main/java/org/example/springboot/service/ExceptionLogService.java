@@ -9,6 +9,9 @@ import org.example.springboot.dto.ExceptionLogPageQuery;
 import org.example.springboot.dto.ExceptionLogSummaryResponse;
 import org.example.springboot.entity.ListPageResponse;
 
+/**
+ * 异常日志查询与处理服务接口。
+ */
 public interface ExceptionLogService {
 
     ListPageResponse<ExceptionLogListItemResponse> page(ExceptionLogPageQuery query);

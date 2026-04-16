@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
 
 @Configuration
 @RequiredArgsConstructor
+/**
+ * 应用启动后的 Neo4j 初始化器，负责约束创建和示例图谱数据补齐。
+ */
 public class Neo4jGraphInitializer {
 
     private final Neo4jGraphRepository neo4jGraphRepository;

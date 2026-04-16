@@ -13,6 +13,9 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+/**
+ * JWT 鉴权拦截器，负责解析 token 并校验管理端访问角色。
+ */
 @Component
 public class JwtAuthInterceptor implements HandlerInterceptor {
 

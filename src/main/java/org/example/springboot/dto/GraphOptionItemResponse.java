@@ -3,6 +3,9 @@ package org.example.springboot.dto;
 import lombok.Getter;
 
 @Getter
+/**
+ * 下拉选项通用响应对象。
+ */
 public class GraphOptionItemResponse {
 
     private final String value;

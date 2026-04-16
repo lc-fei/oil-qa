@@ -4,6 +4,9 @@ import org.apache.ibatis.jdbc.SQL;
 import org.example.springboot.dto.GraphVersionPageQuery;
 import org.springframework.util.StringUtils;
 
+/**
+ * 图谱版本分页查询 SQL 构造器。
+ */
 public class GraphVersionSqlProvider {
 
     public String buildCount(GraphVersionPageQuery query) {

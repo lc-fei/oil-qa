@@ -21,12 +21,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 异常日志接口独立成模块，前端页面即使合并展示也不影响后端边界清晰。
+ */
 @RestController
 @RequestMapping("/api/admin/exception-logs")
 @RequiredArgsConstructor
 public class ExceptionLogController {
-
-    // 异常日志接口独立成模块，前端页面即使合并展示也不影响后端边界清晰。
     private final ExceptionLogService exceptionLogService;
 
     @GetMapping

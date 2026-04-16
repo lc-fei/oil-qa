@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * AI 调用监控详情响应对象。
+ */
 public class MonitorAiCallDetailResponse {
 
     private String requestId;

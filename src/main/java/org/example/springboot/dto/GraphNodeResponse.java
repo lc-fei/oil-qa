@@ -7,6 +7,9 @@ import java.util.Map;
 
 @Getter
 @Builder
+/**
+ * 图谱可视化中的节点响应对象。
+ */
 public class GraphNodeResponse {
 
     private String id;

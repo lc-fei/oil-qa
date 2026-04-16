@@ -7,6 +7,9 @@ import org.example.springboot.entity.Role;
 
 import java.util.List;
 
+/**
+ * 角色与用户角色关系查询 Mapper。
+ */
 @Mapper
 public interface RoleMapper {
 

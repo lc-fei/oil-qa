@@ -12,6 +12,9 @@ import org.example.springboot.entity.GraphRelationType;
 
 import java.util.List;
 
+/**
+ * 图谱关系类型字典表 Mapper。
+ */
 @Mapper
 public interface GraphRelationTypeMapper {
 

@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
+/**
+ * 角色信息响应对象。
+ */
 public class RoleResponse {
 
     private Long id;

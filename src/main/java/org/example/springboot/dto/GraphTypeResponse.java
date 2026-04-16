@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
+/**
+ * 图谱类型响应对象。
+ */
 public class GraphTypeResponse {
 
     private Long id;

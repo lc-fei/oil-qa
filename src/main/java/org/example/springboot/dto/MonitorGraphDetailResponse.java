@@ -8,6 +8,9 @@ import java.util.Map;
 
 @Getter
 @Builder
+/**
+ * 图谱检索链路监控详情响应对象。
+ */
 public class MonitorGraphDetailResponse {
 
     private String requestId;

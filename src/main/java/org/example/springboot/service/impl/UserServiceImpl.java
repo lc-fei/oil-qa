@@ -29,6 +29,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 认证与当前用户相关服务实现，负责登录、当前用户获取和密码修改。
+ */
 public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;

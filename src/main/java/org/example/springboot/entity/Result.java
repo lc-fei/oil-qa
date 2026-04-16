@@ -11,6 +11,9 @@ import java.time.LocalDateTime;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
+/**
+ * 统一接口响应包装对象。
+ */
 public class Result<T> {
 
     private Integer code;

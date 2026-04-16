@@ -7,6 +7,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 图谱可视化接口返回对象。
+ */
 public class GraphVisualizationResponse {
 
     private GraphNodeResponse center;

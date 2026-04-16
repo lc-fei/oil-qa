@@ -9,6 +9,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 用户列表项响应对象。
+ */
 public class UserListItemResponse {
 
     private Long id;

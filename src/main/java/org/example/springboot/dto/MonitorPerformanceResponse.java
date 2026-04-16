@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
+/**
+ * 运行性能指标摘要响应对象。
+ */
 public class MonitorPerformanceResponse {
 
     private Double avgResponseTimeMs;

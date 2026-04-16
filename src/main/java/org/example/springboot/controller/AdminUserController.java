@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 管理端用户管理接口。
+ */
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor

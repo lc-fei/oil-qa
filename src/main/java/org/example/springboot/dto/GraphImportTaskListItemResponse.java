@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * 图谱导入任务列表项响应对象。
+ */
 public class GraphImportTaskListItemResponse {
 
     private Long taskId;

@@ -7,6 +7,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 请求全链路耗时明细响应对象。
+ */
 public class MonitorTimingsResponse {
 
     private String requestId;

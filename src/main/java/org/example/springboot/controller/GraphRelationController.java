@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * 图谱关系管理接口。
+ */
 @RestController
 @RequestMapping("/api/admin/graph/relations")
 @RequiredArgsConstructor

@@ -16,6 +16,9 @@ import org.example.springboot.entity.ListPageResponse;
 
 import java.util.List;
 
+/**
+ * 运行监控查询服务接口。
+ */
 public interface MonitorService {
 
     MonitorOverviewResponse getOverview(String rangeType, String startTime, String endTime);

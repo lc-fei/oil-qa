@@ -28,6 +28,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 管理端用户管理服务实现。
+ */
 public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserMapper userMapper;

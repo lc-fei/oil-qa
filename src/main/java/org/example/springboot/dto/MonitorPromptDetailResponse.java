@@ -7,6 +7,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Builder
+/**
+ * Prompt 构建链路监控详情响应对象。
+ */
 public class MonitorPromptDetailResponse {
 
     private String requestId;

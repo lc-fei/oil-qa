@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
+/**
+ * 单个请求阶段耗时明细对象。
+ */
 public class MonitorTimingPhaseResponse {
 
     private String phaseCode;

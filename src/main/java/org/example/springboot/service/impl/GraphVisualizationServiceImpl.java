@@ -22,6 +22,9 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱可视化服务实现，负责把图数据库结果组装成前端图组件可直接消费的结构。
+ */
 public class GraphVisualizationServiceImpl implements GraphVisualizationService {
 
     private final Neo4jGraphRepository neo4jGraphRepository;

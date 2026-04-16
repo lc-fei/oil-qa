@@ -8,6 +8,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 图谱模块 JSON 序列化与反序列化工具。
+ */
 public final class GraphJsonUtils {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();

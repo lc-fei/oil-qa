@@ -6,6 +6,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
+/**
+ * 运行监控按日汇总统计记录。
+ */
 public class MonitorDailyStatRecord {
 
     private Long id;

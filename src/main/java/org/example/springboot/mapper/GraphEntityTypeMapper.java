@@ -12,6 +12,9 @@ import org.example.springboot.entity.GraphEntityType;
 
 import java.util.List;
 
+/**
+ * 图谱实体类型字典表 Mapper。
+ */
 @Mapper
 public interface GraphEntityTypeMapper {
 

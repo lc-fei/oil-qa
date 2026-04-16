@@ -5,6 +5,9 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
+/**
+ * 图谱关系边的持久化对象。
+ */
 public class GraphRelationRecord {
 
     private String id;

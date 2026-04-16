@@ -25,6 +25,9 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱类型管理服务实现。
+ */
 public class GraphTypeServiceImpl implements GraphTypeService {
 
     private final GraphEntityTypeMapper graphEntityTypeMapper;

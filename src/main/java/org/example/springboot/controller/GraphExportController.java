@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 图谱导出接口，当前支持实体和关系导出。
+ */
 @RestController
 @RequestMapping("/api/admin/graph/export")
 @RequiredArgsConstructor

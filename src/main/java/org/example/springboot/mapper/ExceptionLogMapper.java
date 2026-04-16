@@ -11,6 +11,9 @@ import org.example.springboot.entity.ExceptionLogRecord;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 异常日志模块 MyBatis Mapper。
+ */
 @Mapper
 public interface ExceptionLogMapper {
 

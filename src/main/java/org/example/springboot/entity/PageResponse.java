@@ -7,6 +7,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 通用分页响应模型。
+ */
 public class PageResponse<T> {
 
     private List<T> records;

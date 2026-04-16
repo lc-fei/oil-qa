@@ -5,6 +5,9 @@ import lombok.Getter;
 
 import java.util.List;
 
+/**
+ * 登录用户主体对象，供 token 载荷和鉴权上下文复用。
+ */
 @Getter
 @Builder
 public class UserPrincipal {

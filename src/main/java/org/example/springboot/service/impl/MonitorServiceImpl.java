@@ -38,6 +38,9 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 运行监控模块服务实现，负责聚合监控统计与详情查询结果。
+ */
 public class MonitorServiceImpl implements MonitorService {
 
     // 监控模块的读取全部走关系库，避免为了展示类查询再回扫问答主业务服务。

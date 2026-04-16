@@ -24,12 +24,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * 运行监控接口统一从该控制器进入，便于前端按模块维护调用入口。
+ */
 @RestController
 @RequestMapping("/api/admin/monitor")
 @RequiredArgsConstructor
 public class MonitorController {
-
-    // 运行监控接口统一从该控制器进入，便于前端按模块维护调用入口。
     private final MonitorService monitorService;
 
     @GetMapping("/overview")

@@ -10,6 +10,9 @@ import org.example.springboot.entity.GraphVersionRecord;
 
 import java.util.List;
 
+/**
+ * 图谱版本表 Mapper。
+ */
 @Mapper
 public interface GraphVersionMapper {
 

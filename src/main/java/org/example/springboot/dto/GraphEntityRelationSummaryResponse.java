@@ -5,6 +5,9 @@ import lombok.Getter;
 
 @Getter
 @Builder
+/**
+ * 实体详情页中的关系列表摘要对象。
+ */
 public class GraphEntityRelationSummaryResponse {
 
     private String id;

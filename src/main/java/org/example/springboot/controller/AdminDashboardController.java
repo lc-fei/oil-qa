@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 管理端首页总揽相关接口。
+ */
 @RestController
 @RequestMapping("/api/admin/dashboard")
 public class AdminDashboardController {

@@ -3,6 +3,9 @@ package org.example.springboot.entity;
 import lombok.Data;
 
 @Data
+/**
+ * 角色信息对象。
+ */
 public class Role {
 
     private Long id;

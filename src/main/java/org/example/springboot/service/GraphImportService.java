@@ -8,6 +8,9 @@ import org.example.springboot.entity.ListPageResponse;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * 图谱导入服务接口。
+ */
 public interface GraphImportService {
 
     ByteArrayResource downloadTemplate(String templateType);

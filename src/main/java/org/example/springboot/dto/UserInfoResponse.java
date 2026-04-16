@@ -7,6 +7,9 @@ import java.util.List;
 
 @Getter
 @Builder
+/**
+ * 当前登录用户信息响应对象。
+ */
 public class UserInfoResponse {
 
     private Long id;

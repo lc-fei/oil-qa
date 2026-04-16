@@ -39,6 +39,9 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * 图谱导入服务实现，负责模板、任务记录和数据解析。
+ */
 public class GraphImportServiceImpl implements GraphImportService {
 
     private final GraphImportTaskMapper graphImportTaskMapper;
