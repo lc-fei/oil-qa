@@ -27,3 +27,37 @@ VALUES (1, 1, 1),
 ON DUPLICATE KEY UPDATE
 user_id = VALUES(user_id),
 role_id = VALUES(role_id);
+
+INSERT INTO kg_entity_type (id, type_name, type_code, description, status, sort_no, created_by)
+VALUES (1, '油井', 'oil_well', '油井实体类型', 1, 1, 'system'),
+       (2, '井段', 'well_section', '井段实体类型', 1, 2, 'system'),
+       (3, '地层', 'formation', '地层实体类型', 1, 3, 'system'),
+       (4, '设备', 'equipment', '设备实体类型', 1, 4, 'system'),
+       (5, '工艺', 'process', '工艺实体类型', 1, 5, 'system'),
+       (6, '故障类型', 'fault_type', '故障类型实体类型', 1, 6, 'system'),
+       (7, '处理方案', 'solution', '处理方案实体类型', 1, 7, 'system')
+ON DUPLICATE KEY UPDATE
+type_name = VALUES(type_name),
+description = VALUES(description),
+status = VALUES(status),
+sort_no = VALUES(sort_no),
+created_by = VALUES(created_by);
+
+INSERT INTO kg_relation_type (id, type_name, type_code, description, status, sort_no, created_by)
+VALUES (1, '属于', 'belongs_to', '归属关系', 1, 1, 'system'),
+       (2, '使用', 'uses', '使用关系', 1, 2, 'system'),
+       (3, '包含', 'contains', '包含关系', 1, 3, 'system'),
+       (4, '影响', 'affects', '影响关系', 1, 4, 'system'),
+       (5, '解决', 'solves', '解决关系', 1, 5, 'system')
+ON DUPLICATE KEY UPDATE
+type_name = VALUES(type_name),
+description = VALUES(description),
+status = VALUES(status),
+sort_no = VALUES(sort_no),
+created_by = VALUES(created_by);
+
+INSERT INTO kg_version (id, version_no, version_remark, created_by)
+VALUES (1, 'v1.0.0', '初始图谱数据', 'system')
+ON DUPLICATE KEY UPDATE
+version_remark = VALUES(version_remark),
+created_by = VALUES(created_by);
