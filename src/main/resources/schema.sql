@@ -1,6 +1,11 @@
 DROP TABLE IF EXISTS sys_login_log;
 DROP TABLE IF EXISTS sys_operation_log;
 DROP TABLE IF EXISTS qa_daily_stat;
+DROP TABLE IF EXISTS qa_recommend_question;
+DROP TABLE IF EXISTS qa_message_feedback;
+DROP TABLE IF EXISTS qa_message_favorite;
+DROP TABLE IF EXISTS qa_message;
+DROP TABLE IF EXISTS qa_session;
 DROP TABLE IF EXISTS sys_exception_log;
 DROP TABLE IF EXISTS qa_ai_call_record;
 DROP TABLE IF EXISTS qa_prompt_record;
@@ -216,6 +221,84 @@ CREATE TABLE qa_daily_stat (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT uk_qa_daily_stat_date UNIQUE (stat_date)
+);
+
+CREATE TABLE qa_session (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    session_no VARCHAR(64) NOT NULL,
+    user_id BIGINT NOT NULL,
+    title VARCHAR(255) DEFAULT NULL,
+    session_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    last_message_at DATETIME DEFAULT NULL,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_session_no UNIQUE (session_no),
+    KEY idx_qa_session_user_id (user_id),
+    KEY idx_qa_session_status (session_status),
+    KEY idx_qa_session_last_message_at (last_message_at),
+    KEY idx_qa_session_created_at (created_at)
+);
+
+CREATE TABLE qa_message (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    message_no VARCHAR(64) NOT NULL,
+    session_id BIGINT NOT NULL,
+    request_no VARCHAR(64) DEFAULT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'ASSISTANT',
+    question_text TEXT NOT NULL,
+    answer_text LONGTEXT DEFAULT NULL,
+    answer_summary TEXT DEFAULT NULL,
+    message_status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+    sequence_no INT NOT NULL DEFAULT 1,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME DEFAULT NULL,
+    CONSTRAINT uk_qa_message_no UNIQUE (message_no),
+    KEY idx_qa_message_session_id (session_id),
+    KEY idx_qa_message_request_no (request_no),
+    KEY idx_qa_message_status (message_status),
+    KEY idx_qa_message_created_at (created_at)
+);
+
+CREATE TABLE qa_message_favorite (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    message_id BIGINT NOT NULL,
+    session_id BIGINT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_message_favorite UNIQUE (user_id, message_id),
+    KEY idx_qa_message_favorite_user_id (user_id),
+    KEY idx_qa_message_favorite_message_id (message_id),
+    KEY idx_qa_message_favorite_session_id (session_id),
+    KEY idx_qa_message_favorite_created_at (created_at)
+);
+
+CREATE TABLE qa_message_feedback (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    message_id BIGINT NOT NULL,
+    feedback_type VARCHAR(20) NOT NULL,
+    feedback_reason VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_message_feedback UNIQUE (user_id, message_id),
+    KEY idx_qa_message_feedback_user_id (user_id),
+    KEY idx_qa_message_feedback_message_id (message_id),
+    KEY idx_qa_message_feedback_type (feedback_type),
+    KEY idx_qa_message_feedback_created_at (created_at)
+);
+
+CREATE TABLE qa_recommend_question (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    question_text VARCHAR(500) NOT NULL,
+    question_type VARCHAR(50) NOT NULL,
+    sort_no INT NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_qa_recommend_question_type (question_type),
+    KEY idx_qa_recommend_question_status (status),
+    KEY idx_qa_recommend_question_sort_no (sort_no)
 );
 
 CREATE TABLE kg_entity_type (

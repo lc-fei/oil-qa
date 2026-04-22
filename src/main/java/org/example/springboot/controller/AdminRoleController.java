@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.springboot.dto.RoleResponse;
 import org.example.springboot.entity.Result;
 import org.example.springboot.service.RoleService;
+import org.example.springboot.service.impl.RoleServiceImpl;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

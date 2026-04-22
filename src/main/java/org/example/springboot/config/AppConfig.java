@@ -13,7 +13,7 @@ import org.neo4j.driver.GraphDatabase;
  * 应用级基础 Bean 配置，集中管理加密器和 Neo4j 驱动等通用组件。
  */
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, AuthProperties.class, Neo4jProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, AuthProperties.class, Neo4jProperties.class, BailianProperties.class})
 public class AppConfig {
 
     @Bean

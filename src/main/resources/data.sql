@@ -61,3 +61,14 @@ VALUES (1, 'v1.0.0', '初始图谱数据', 'system')
 ON DUPLICATE KEY UPDATE
 version_remark = VALUES(version_remark),
 created_by = VALUES(created_by);
+
+INSERT INTO qa_recommend_question (id, question_text, question_type, sort_no, status)
+VALUES (1, '什么是井壁失稳？', 'CONCEPT', 1, 1),
+       (2, '钻井液密度过高会带来哪些风险？', 'MECHANISM', 2, 1),
+       (3, '发生井漏时一般怎么处理？', 'PROCESS', 3, 1),
+       (4, '深井条件下卡钻机理有什么差异？', 'RISK', 4, 1)
+ON DUPLICATE KEY UPDATE
+question_text = VALUES(question_text),
+question_type = VALUES(question_type),
+sort_no = VALUES(sort_no),
+status = VALUES(status);

@@ -71,6 +71,12 @@ public class UserServiceImpl implements UserService {
                 .token(token)
                 .tokenType(authProperties.getTokenPrefix())
                 .expiresIn(jwtTokenProvider.getExpireSeconds())
+                .userId(user.getId())
+                .username(user.getUsername())
+                .account(user.getAccount())
+                .nickname(null)
+                .status(user.getStatus())
+                .roles(user.getRoles())
                 .userInfo(toUserInfo(user))
                 .build();
     }
@@ -143,9 +149,12 @@ public class UserServiceImpl implements UserService {
 
     private UserInfoResponse toUserInfo(User user) {
         return UserInfoResponse.builder()
+                .userId(user.getId())
                 .id(user.getId())
                 .username(user.getUsername())
                 .account(user.getAccount())
+                .nickname(null)
+                .status(user.getStatus())
                 .roles(user.getRoles() == null ? Collections.emptyList() : user.getRoles())
                 .build();
     }
