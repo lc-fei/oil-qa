@@ -3,7 +3,6 @@ package org.example.springboot.service.impl;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.example.springboot.common.ErrorCode;
-import org.example.springboot.config.AuthProperties;
 import org.example.springboot.dto.ChangePasswordRequest;
 import org.example.springboot.dto.LoginRequest;
 import org.example.springboot.dto.LoginResponse;
@@ -38,7 +37,6 @@ public class UserServiceImpl implements UserService {
     private final LoginLogMapper loginLogMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final AuthProperties authProperties;
 
     @Override
     @Transactional
@@ -69,15 +67,10 @@ public class UserServiceImpl implements UserService {
 
         return LoginResponse.builder()
                 .token(token)
-                .tokenType(authProperties.getTokenPrefix())
-                .expiresIn(jwtTokenProvider.getExpireSeconds())
                 .userId(user.getId())
                 .username(user.getUsername())
                 .account(user.getAccount())
-                .nickname(null)
-                .status(user.getStatus())
                 .roles(user.getRoles())
-                .userInfo(toUserInfo(user))
                 .build();
     }
 
@@ -150,7 +143,6 @@ public class UserServiceImpl implements UserService {
     private UserInfoResponse toUserInfo(User user) {
         return UserInfoResponse.builder()
                 .userId(user.getId())
-                .id(user.getId())
                 .username(user.getUsername())
                 .account(user.getAccount())
                 .nickname(null)

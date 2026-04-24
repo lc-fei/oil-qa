@@ -7,9 +7,9 @@ import org.example.springboot.dto.QaSessionCreateRequest;
 import org.example.springboot.dto.QaSessionCreateResponse;
 import org.example.springboot.dto.QaSessionDetailResponse;
 import org.example.springboot.dto.QaSessionListItemResponse;
+import org.example.springboot.dto.QaSessionListResponse;
 import org.example.springboot.dto.QaSessionPageQuery;
 import org.example.springboot.dto.QaSessionUpdateRequest;
-import org.example.springboot.entity.ListPageResponse;
 import org.example.springboot.entity.QaMessage;
 import org.example.springboot.entity.QaSession;
 import org.example.springboot.exception.BusinessException;
@@ -42,7 +42,7 @@ public class ClientQaSessionServiceImpl implements ClientQaSessionService {
     private final ClientQaMessageMapper clientQaMessageMapper;
 
     @Override
-    public ListPageResponse<QaSessionListItemResponse> pageSessions(QaSessionPageQuery query) {
+    public QaSessionListResponse pageSessions(QaSessionPageQuery query) {
         Long userId = requireCurrentUserId();
         long total = clientQaSessionMapper.countByUser(userId, query);
         List<QaSession> sessions = clientQaSessionMapper.findPageByUser(userId, query);
@@ -65,10 +65,8 @@ public class ClientQaSessionServiceImpl implements ClientQaSessionService {
                         .updatedAt(session.getLastMessageAt() == null ? session.getUpdatedAt() : session.getLastMessageAt())
                         .build())
                 .toList();
-        return ListPageResponse.<QaSessionListItemResponse>builder()
+        return QaSessionListResponse.builder()
                 .list(list)
-                .pageNum(query.getSafePageNum())
-                .pageSize(query.getSafePageSize())
                 .total(total)
                 .build();
     }
@@ -190,7 +188,11 @@ public class ClientQaSessionServiceImpl implements ClientQaSessionService {
 
     private String resolveLastQuestion(Map<Long, Map<String, Object>> sessionSummaryMap, Long sessionId) {
         Map<String, Object> summary = sessionSummaryMap.get(sessionId);
-        return summary == null ? null : (String) summary.get("lastQuestion");
+        if (summary == null) {
+            return "";
+        }
+        Object lastQuestion = summary.get("lastQuestion");
+        return lastQuestion == null ? "" : String.valueOf(lastQuestion);
     }
 
     private Integer resolveMessageCount(Map<Long, Map<String, Object>> sessionSummaryMap, Long sessionId) {

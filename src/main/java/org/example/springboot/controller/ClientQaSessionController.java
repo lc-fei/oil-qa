@@ -6,9 +6,9 @@ import org.example.springboot.dto.QaSessionCreateRequest;
 import org.example.springboot.dto.QaSessionCreateResponse;
 import org.example.springboot.dto.QaSessionDetailResponse;
 import org.example.springboot.dto.QaSessionListItemResponse;
+import org.example.springboot.dto.QaSessionListResponse;
 import org.example.springboot.dto.QaSessionPageQuery;
 import org.example.springboot.dto.QaSessionUpdateRequest;
-import org.example.springboot.entity.ListPageResponse;
 import org.example.springboot.entity.Result;
 import org.example.springboot.service.ClientQaSessionService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,7 +31,7 @@ public class ClientQaSessionController {
     private final ClientQaSessionService clientQaSessionService;
 
     @GetMapping
-    public Result<ListPageResponse<QaSessionListItemResponse>> page(QaSessionPageQuery query) {
+    public Result<QaSessionListResponse> page(QaSessionPageQuery query) {
         return Result.success(clientQaSessionService.pageSessions(query));
     }
 

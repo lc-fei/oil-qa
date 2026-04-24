@@ -1,6 +1,7 @@
 package org.example.springboot.service;
 
 import org.example.springboot.dto.RecommendationResponse;
+import org.example.springboot.dto.RecommendationListResponse;
 
 import java.util.List;
 
@@ -9,5 +10,5 @@ import java.util.List;
  */
 public interface ClientRecommendationService {
 
-    List<RecommendationResponse> listRecommendations();
+    RecommendationListResponse listRecommendations();
 }

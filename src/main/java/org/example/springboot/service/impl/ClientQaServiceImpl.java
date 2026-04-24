@@ -76,6 +76,10 @@ public class ClientQaServiceImpl implements ClientQaService {
     public ClientChatResponse chat(ClientChatRequest request) {
         UserPrincipal principal = requirePrincipal();
         String question = normalizeQuestion(request.getQuestion());
+        String contextMode = normalizeContextMode(request.getContextMode());
+        String answerMode = normalizeAnswerMode(request.getAnswerMode());
+        request.setContextMode(contextMode);
+        request.setAnswerMode(answerMode);
         LocalDateTime startTime = LocalDateTime.now();
         Long sessionId = request.getSessionId();
         QaSession session = sessionId == null ? null : requireSession(sessionId, principal.getId());
@@ -95,8 +99,10 @@ public class ClientQaServiceImpl implements ClientQaService {
         clientQaChatMapper.insertNlp(buildNlpRecord(requestNo, nlpResult, nlpDurationMs));
 
         long graphStartedAt = System.currentTimeMillis();
-        Map<String, Object> graphResult = queryGraph(question, nlpResult);
-        int graphDurationMs = elapsed(graphStartedAt);
+        Map<String, Object> graphResult = "LLM_ONLY".equalsIgnoreCase(answerMode)
+                ? emptyGraphResult()
+                : queryGraph(question, nlpResult);
+        int graphDurationMs = "LLM_ONLY".equalsIgnoreCase(answerMode) ? 0 : elapsed(graphStartedAt);
         clientQaChatMapper.insertGraph(buildGraphRecord(requestNo, question, graphResult, graphDurationMs));
 
         long promptStartedAt = System.currentTimeMillis();
@@ -117,10 +123,23 @@ public class ClientQaServiceImpl implements ClientQaService {
         } catch (Exception ex) {
             int failedAiDuration = 0;
             clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, failedAiDuration, aiStatusCode, null, ex.getMessage()));
-            handleChatFailure(ex, principal, request, requestNo, traceId, message);
-            throw ex instanceof BusinessException businessException
-                    ? businessException
-                    : new BusinessException(ErrorCode.INTERNAL_ERROR.getCode(), "问答生成失败");
+            return buildFailedChatResponse(
+                    ex,
+                    principal,
+                    request,
+                    session,
+                    message,
+                    requestNo,
+                    traceId,
+                    question,
+                    nlpResult,
+                    nlpDurationMs,
+                    graphResult,
+                    graphDurationMs,
+                    promptDurationMs,
+                    failedAiDuration,
+                    startTime
+            );
         }
 
         LocalDateTime finishedAt = LocalDateTime.now();
@@ -170,6 +189,7 @@ public class ClientQaServiceImpl implements ClientQaService {
         MonitorGraphRecord graphRecord = monitorMapper.findGraphByRequestNo(message.getRequestNo());
         MonitorPromptRecord promptRecord = monitorMapper.findPromptByRequestNo(message.getRequestNo());
         MonitorAiCallRecord aiCallRecord = monitorMapper.findAiCallByRequestNo(message.getRequestNo());
+        MonitorRequestRecord requestRecord = monitorMapper.findRequestByNo(message.getRequestNo());
 
         List<Map<String, Object>> hitEntityMaps = graphRecord == null
                 ? List.of()
@@ -182,7 +202,7 @@ public class ClientQaServiceImpl implements ClientQaService {
                 .map(item -> ClientEvidenceEntityResponse.builder()
                         .entityId(stringValue(item.get("id")))
                         .entityName(stringValue(item.get("name")))
-                        .entityType(stringValue(item.get("typeName")))
+                        .entityType(resolveEntityType(item))
                         .build())
                 .toList();
         List<ClientEvidenceRelationResponse> relations = hitRelationMaps.stream()
@@ -201,7 +221,7 @@ public class ClientQaServiceImpl implements ClientQaService {
                 .graphData(buildGraphData(hitEntityMaps, hitRelationMaps))
                 .sources(buildEvidenceSources(graphRecord, promptRecord))
                 .timings(ClientChatTimingsResponse.builder()
-                        .totalDurationMs(calculateTotalDuration(nlpRecord, graphRecord, promptRecord, aiCallRecord))
+                        .totalDurationMs(requestRecord == null ? calculateTotalDuration(nlpRecord, graphRecord, promptRecord, aiCallRecord) : requestRecord.getTotalDurationMs())
                         .nlpDurationMs(nlpRecord == null ? null : nlpRecord.getDurationMs())
                         .graphDurationMs(graphRecord == null ? null : graphRecord.getDurationMs())
                         .promptDurationMs(promptRecord == null ? null : promptRecord.getDurationMs())
@@ -230,6 +250,37 @@ public class ClientQaServiceImpl implements ClientQaService {
         return normalized;
     }
 
+    private String normalizeContextMode(String contextMode) {
+        if (!StringUtils.hasText(contextMode)) {
+            return "ON";
+        }
+        String normalized = contextMode.trim().toUpperCase();
+        if (!"ON".equals(normalized) && !"OFF".equals(normalized)) {
+            throw new BusinessException(ErrorCode.BUSINESS_VALIDATION_FAILED.getCode(), "contextMode仅支持ON或OFF");
+        }
+        return normalized;
+    }
+
+    private String normalizeAnswerMode(String answerMode) {
+        if (!StringUtils.hasText(answerMode)) {
+            return "GRAPH_ENHANCED";
+        }
+        String normalized = answerMode.trim().toUpperCase();
+        if (!"GRAPH_ENHANCED".equals(normalized) && !"LLM_ONLY".equals(normalized)) {
+            throw new BusinessException(ErrorCode.BUSINESS_VALIDATION_FAILED.getCode(), "answerMode仅支持GRAPH_ENHANCED或LLM_ONLY");
+        }
+        return normalized;
+    }
+
+    private Map<String, Object> emptyGraphResult() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("graphHit", false);
+        result.put("entities", List.of());
+        result.put("relations", List.of());
+        result.put("propertySummary", List.of());
+        return result;
+    }
+
     private List<Map<String, Object>> parseObjectList(String json) {
         return GraphJsonUtils.toList(json, new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {
         });
@@ -237,6 +288,11 @@ public class ClientQaServiceImpl implements ClientQaService {
 
     private String stringValue(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private String resolveEntityType(Map<String, Object> entityMap) {
+        String typeName = stringValue(entityMap.get("typeName"));
+        return StringUtils.hasText(typeName) ? typeName : stringValue(entityMap.get("typeCode"));
     }
 
     private ClientEvidenceGraphDataResponse buildGraphData(List<Map<String, Object>> entityMaps, List<Map<String, Object>> relationMaps) {
@@ -247,15 +303,43 @@ public class ClientQaServiceImpl implements ClientQaService {
                     .edges(List.of())
                     .build();
         }
-        List<GraphNodeResponse> nodes = entityMaps.stream()
-                .map(item -> GraphNodeResponse.builder()
-                        .id(stringValue(item.get("id")))
-                        .name(stringValue(item.get("name")))
-                        .typeCode(stringValue(item.get("typeCode")))
-                        .typeName(stringValue(item.get("typeName")))
-                        .properties(Map.of("description", stringValue(item.get("description"))))
-                        .build())
-                .toList();
+        Map<String, GraphNodeResponse> nodeMap = new LinkedHashMap<>();
+        for (Map<String, Object> item : entityMaps) {
+            String id = stringValue(item.get("id"));
+            if (!StringUtils.hasText(id)) {
+                continue;
+            }
+            nodeMap.put(id, GraphNodeResponse.builder()
+                    .id(id)
+                    .name(stringValue(item.get("name")))
+                    .typeCode(stringValue(item.get("typeCode")))
+                    .typeName(stringValue(item.get("typeName")))
+                    .properties(buildNodeProperties(item.get("description")))
+                    .build());
+        }
+        for (Map<String, Object> item : relationMaps) {
+            String sourceId = stringValue(item.get("sourceEntityId"));
+            String targetId = stringValue(item.get("targetEntityId"));
+            if (StringUtils.hasText(sourceId) && !nodeMap.containsKey(sourceId)) {
+                nodeMap.put(sourceId, GraphNodeResponse.builder()
+                        .id(sourceId)
+                        .name(stringValue(item.get("sourceEntityName")))
+                        .typeCode(null)
+                        .typeName(null)
+                        .properties(Map.of())
+                        .build());
+            }
+            if (StringUtils.hasText(targetId) && !nodeMap.containsKey(targetId)) {
+                nodeMap.put(targetId, GraphNodeResponse.builder()
+                        .id(targetId)
+                        .name(stringValue(item.get("targetEntityName")))
+                        .typeCode(null)
+                        .typeName(null)
+                        .properties(Map.of())
+                        .build());
+            }
+        }
+        List<GraphNodeResponse> nodes = new ArrayList<>(nodeMap.values());
         List<GraphEdgeResponse> edges = relationMaps.stream()
                 .map(item -> GraphEdgeResponse.builder()
                         .id(stringValue(item.get("id")))
@@ -266,11 +350,20 @@ public class ClientQaServiceImpl implements ClientQaService {
                         .description(stringValue(item.get("description")))
                         .build())
                 .toList();
+        GraphNodeResponse center = !nodes.isEmpty() ? nodes.get(0) : null;
         return ClientEvidenceGraphDataResponse.builder()
-                .center(nodes.isEmpty() ? null : nodes.get(0))
+                .center(center)
                 .nodes(nodes)
                 .edges(edges)
                 .build();
+    }
+
+    private Map<String, Object> buildNodeProperties(Object description) {
+        String desc = stringValue(description);
+        if (!StringUtils.hasText(desc)) {
+            return Map.of();
+        }
+        return Map.of("description", desc);
     }
 
     private List<ClientEvidenceSourceResponse> buildEvidenceSources(MonitorGraphRecord graphRecord, MonitorPromptRecord promptRecord) {
@@ -688,6 +781,52 @@ public class ClientQaServiceImpl implements ClientQaService {
         exceptionLog.setHandleStatus("UNHANDLED");
         exceptionLog.setOccurredAt(finishedAt);
         clientQaChatMapper.insertExceptionLog(exceptionLog);
+    }
+
+    private ClientChatResponse buildFailedChatResponse(Exception ex,
+                                                       UserPrincipal principal,
+                                                       ClientChatRequest request,
+                                                       QaSession session,
+                                                       QaMessage message,
+                                                       String requestNo,
+                                                       String traceId,
+                                                       String question,
+                                                       Map<String, Object> nlpResult,
+                                                       int nlpDurationMs,
+                                                       Map<String, Object> graphResult,
+                                                       int graphDurationMs,
+                                                       int promptDurationMs,
+                                                       int aiDurationMs,
+                                                       LocalDateTime startTime) {
+        handleChatFailure(ex, principal, request, requestNo, traceId, message);
+        LocalDateTime finishedAt = LocalDateTime.now();
+        int totalDurationMs = millisBetween(startTime, finishedAt);
+        clientQaChatMapper.touchSession(session.getId(), principal.getId(), buildSessionTitle(question), finishedAt);
+        return ClientChatResponse.builder()
+                .sessionId(session.getId())
+                .sessionNo(session.getSessionNo())
+                .messageId(message.getId())
+                .messageNo(message.getMessageNo())
+                .requestNo(requestNo)
+                .question(question)
+                .answer("当前回答生成失败，请稍后重试。")
+                .answerSummary("回答生成失败")
+                .followUps(List.of())
+                .status("FAILED")
+                .timings(ClientChatTimingsResponse.builder()
+                        .totalDurationMs(totalDurationMs)
+                        .nlpDurationMs(nlpDurationMs)
+                        .graphDurationMs(graphDurationMs)
+                        .promptDurationMs(promptDurationMs)
+                        .aiDurationMs(aiDurationMs)
+                        .build())
+                .evidenceSummary(ClientChatEvidenceSummaryResponse.builder()
+                        .graphHit((Boolean) graphResult.get("graphHit"))
+                        .entityCount(((List<?>) graphResult.get("entities")).size())
+                        .relationCount(((List<?>) graphResult.get("relations")).size())
+                        .confidence((Double) nlpResult.get("confidence"))
+                        .build())
+                .build();
     }
 
     private List<String> buildFollowUps(String question, Map<String, Object> graphResult) {

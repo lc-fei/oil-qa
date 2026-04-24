@@ -11,13 +11,8 @@ import lombok.Getter;
 public class LoginResponse {
 
     private String token;
-    private String tokenType;
-    private Long expiresIn;
     private Long userId;
     private String username;
     private String account;
-    private String nickname;
-    private Integer status;
     private java.util.List<String> roles;
-    private UserInfoResponse userInfo;
 }

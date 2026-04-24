@@ -1,6 +1,7 @@
 package org.example.springboot.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.example.springboot.dto.RecommendationListResponse;
 import org.example.springboot.dto.RecommendationResponse;
 import org.example.springboot.mapper.ClientRecommendationMapper;
 import org.example.springboot.service.ClientRecommendationService;
@@ -18,8 +19,8 @@ public class ClientRecommendationServiceImpl implements ClientRecommendationServ
     private final ClientRecommendationMapper clientRecommendationMapper;
 
     @Override
-    public List<RecommendationResponse> listRecommendations() {
-        return clientRecommendationMapper.findEnabledList().stream()
+    public RecommendationListResponse listRecommendations() {
+        List<RecommendationResponse> list = clientRecommendationMapper.findEnabledList().stream()
                 .map(item -> RecommendationResponse.builder()
                         .id(item.getId())
                         .questionText(item.getQuestionText())
@@ -27,5 +28,8 @@ public class ClientRecommendationServiceImpl implements ClientRecommendationServ
                         .sortNo(item.getSortNo())
                         .build())
                 .toList();
+        return RecommendationListResponse.builder()
+                .list(list)
+                .build();
     }
 }

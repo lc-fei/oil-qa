@@ -13,7 +13,6 @@ import java.util.List;
 public class UserInfoResponse {
 
     private Long userId;
-    private Long id;
     private String username;
     private String account;
     private String nickname;
