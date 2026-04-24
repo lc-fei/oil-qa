@@ -7,17 +7,19 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 
 /**
- * 用户端收藏列表项响应对象。
+ * 用户端收藏详情响应对象。
  */
 @Getter
 @Builder
-public class FavoriteListItemResponse {
+public class FavoriteDetailResponse {
 
     private Long favoriteId;
     private String favoriteType;
     private Long sessionId;
     private Long messageId;
     private String title;
+    private String question;
+    private String answer;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;

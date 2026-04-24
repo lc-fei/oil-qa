@@ -3,6 +3,7 @@ package org.example.springboot.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.example.springboot.common.ErrorCode;
 import org.example.springboot.dto.FavoriteActionResponse;
+import org.example.springboot.dto.FavoriteDetailResponse;
 import org.example.springboot.dto.FavoriteListItemResponse;
 import org.example.springboot.dto.FavoriteListResponse;
 import org.example.springboot.dto.FavoritePageQuery;
@@ -41,6 +42,25 @@ public class ClientFavoriteServiceImpl implements ClientFavoriteService {
         return FavoriteListResponse.builder()
                 .total(total)
                 .list(list)
+                .build();
+    }
+
+    @Override
+    public FavoriteDetailResponse getFavoriteDetail(Long favoriteId) {
+        Long userId = requireCurrentUserId();
+        Map<String, Object> row = clientFavoriteMapper.findFavoriteDetailByIdAndUserId(favoriteId, userId);
+        if (row == null || row.isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "收藏记录不存在");
+        }
+        return FavoriteDetailResponse.builder()
+                .favoriteId(longValue(row.get("favoriteId")))
+                .favoriteType((String) row.get("favoriteType"))
+                .sessionId(longValue(row.get("sessionId")))
+                .messageId(longValue(row.get("messageId")))
+                .title((String) row.get("title"))
+                .question((String) row.get("question"))
+                .answer((String) row.get("answer"))
+                .createdAt((java.time.LocalDateTime) row.get("createdAt"))
                 .build();
     }
 
@@ -100,8 +120,6 @@ public class ClientFavoriteServiceImpl implements ClientFavoriteService {
                 .sessionId(longValue(row.get("sessionId")))
                 .messageId(longValue(row.get("messageId")))
                 .title((String) row.get("title"))
-                .question((String) row.get("question"))
-                .answerSnippet((String) row.get("answerSnippet"))
                 .createdAt((java.time.LocalDateTime) row.get("createdAt"))
                 .build();
     }

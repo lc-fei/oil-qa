@@ -1,6 +1,7 @@
 package org.example.springboot.service;
 
 import org.example.springboot.dto.FavoriteActionResponse;
+import org.example.springboot.dto.FavoriteDetailResponse;
 import org.example.springboot.dto.FavoriteListResponse;
 import org.example.springboot.dto.FavoritePageQuery;
 
@@ -10,6 +11,8 @@ import org.example.springboot.dto.FavoritePageQuery;
 public interface ClientFavoriteService {
 
     FavoriteListResponse pageFavorites(FavoritePageQuery query);
+
+    FavoriteDetailResponse getFavoriteDetail(Long favoriteId);
 
     FavoriteActionResponse createFavorite(Long messageId);
 

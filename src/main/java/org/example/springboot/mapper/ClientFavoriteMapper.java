@@ -77,6 +77,24 @@ public interface ClientFavoriteMapper {
     List<Map<String, Object>> pageFavorites(@Param("userId") Long userId, @Param("query") FavoritePageQuery query);
 
     @Select("""
+            SELECT f.id AS favoriteId,
+                   'MESSAGE' AS favoriteType,
+                   f.session_id AS sessionId,
+                   f.message_id AS messageId,
+                   COALESCE(s.title, '') AS title,
+                   COALESCE(m.question_text, '') AS question,
+                   COALESCE(m.answer_text, '') AS answer,
+                   f.created_at AS createdAt
+            FROM qa_message_favorite f
+            INNER JOIN qa_message m ON m.id = f.message_id AND m.is_deleted = 0
+            INNER JOIN qa_session s ON s.id = f.session_id AND s.is_deleted = 0
+            WHERE f.id = #{favoriteId}
+              AND f.user_id = #{userId}
+            LIMIT 1
+            """)
+    Map<String, Object> findFavoriteDetailByIdAndUserId(@Param("favoriteId") Long favoriteId, @Param("userId") Long userId);
+
+    @Select("""
             SELECT m.id,
                    m.message_no,
                    m.session_id,

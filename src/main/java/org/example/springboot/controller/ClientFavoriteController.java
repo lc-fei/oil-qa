@@ -2,6 +2,7 @@ package org.example.springboot.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.springboot.dto.FavoriteActionResponse;
+import org.example.springboot.dto.FavoriteDetailResponse;
 import org.example.springboot.dto.FavoriteListResponse;
 import org.example.springboot.dto.FavoritePageQuery;
 import org.example.springboot.entity.Result;
@@ -25,6 +26,11 @@ public class ClientFavoriteController {
     @GetMapping("/api/client/favorites")
     public Result<FavoriteListResponse> page(FavoritePageQuery query) {
         return Result.success(clientFavoriteService.pageFavorites(query));
+    }
+
+    @GetMapping("/api/client/favorites/{favoriteId}")
+    public Result<FavoriteDetailResponse> detail(@PathVariable Long favoriteId) {
+        return Result.success(clientFavoriteService.getFavoriteDetail(favoriteId));
     }
 
     @PostMapping("/api/client/messages/{messageId}/favorite")

@@ -24,8 +24,6 @@ public class ClientFavoriteSqlProvider {
                 f.session_id AS sessionId,
                 f.message_id AS messageId,
                 COALESCE(s.title, '') AS title,
-                COALESCE(m.question_text, '') AS question,
-                COALESCE(NULLIF(m.answer_summary, ''), '') AS answerSnippet,
                 f.created_at AS createdAt
                 """);
         return sql + " ORDER BY f.created_at DESC, f.id DESC LIMIT #{query.offset}, #{query.safePageSize}";
