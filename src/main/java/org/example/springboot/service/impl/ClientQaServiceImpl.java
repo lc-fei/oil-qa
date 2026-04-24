@@ -770,17 +770,28 @@ public class ClientQaServiceImpl implements ClientQaService {
         exceptionLog.setStackTrace(stackTrace(ex));
         exceptionLog.setRequestUri("/api/client/qa/chat");
         exceptionLog.setRequestMethod("POST");
-        exceptionLog.setRequestParamSummary(GraphJsonUtils.toJson(Map.of(
-                "sessionId", request.getSessionId(),
-                "question", request.getQuestion()
-        )));
-        exceptionLog.setContextInfo(GraphJsonUtils.toJson(Map.of(
-                "userId", principal.getId(),
-                "account", principal.getAccount()
-        )));
+        exceptionLog.setRequestParamSummary(GraphJsonUtils.toJson(buildExceptionRequestParams(request)));
+        exceptionLog.setContextInfo(GraphJsonUtils.toJson(buildExceptionContext(principal)));
         exceptionLog.setHandleStatus("UNHANDLED");
         exceptionLog.setOccurredAt(finishedAt);
         clientQaChatMapper.insertExceptionLog(exceptionLog);
+    }
+
+    private Map<String, Object> buildExceptionRequestParams(ClientChatRequest request) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("sessionId", request.getSessionId());
+        params.put("question", request.getQuestion());
+        params.put("contextMode", request.getContextMode());
+        params.put("answerMode", request.getAnswerMode());
+        return params;
+    }
+
+    private Map<String, Object> buildExceptionContext(UserPrincipal principal) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("userId", principal.getId());
+        context.put("account", principal.getAccount());
+        context.put("username", principal.getUsername());
+        return context;
     }
 
     private ClientChatResponse buildFailedChatResponse(Exception ex,
