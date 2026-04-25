@@ -159,8 +159,8 @@ public class GraphEntityServiceImpl implements GraphEntityService {
         if (entityType == null || !Integer.valueOf(1).equals(entityType.getStatus())) {
             throw new BusinessException(422, "实体类型不存在或已禁用");
         }
-        if (neo4jGraphRepository.countDuplicateEntity(request.getName().trim(), request.getTypeCode().trim(), excludeId) > 0) {
-            throw new BusinessException(409, "同类型下存在重复实体");
+        if (neo4jGraphRepository.countDuplicateEntityName(request.getName().trim(), excludeId) > 0) {
+            throw new BusinessException(409, "实体名称已存在");
         }
     }
 

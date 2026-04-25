@@ -134,15 +134,13 @@ public class Neo4jGraphRepository {
         });
     }
 
-    public int countDuplicateEntity(String name, String typeCode, String excludeId) {
+    public int countDuplicateEntityName(String name, String excludeId) {
         StringBuilder cypher = new StringBuilder("""
                 MATCH (n:GraphEntity)
                 WHERE n.name = $name
-                  AND n.typeCode = $typeCode
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("name", name);
-        params.put("typeCode", typeCode);
         if (StringUtils.hasText(excludeId)) {
             cypher.append(" AND n.id <> $excludeId");
             params.put("excludeId", excludeId);

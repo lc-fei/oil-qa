@@ -15,6 +15,7 @@ import org.example.springboot.entity.ListPageResponse;
 import org.example.springboot.exception.BusinessException;
 import org.example.springboot.mapper.GraphImportTaskMapper;
 import org.example.springboot.mapper.GraphVersionMapper;
+import org.example.springboot.repository.Neo4jGraphRepository;
 import org.example.springboot.security.AuthContext;
 import org.example.springboot.security.UserPrincipal;
 import org.example.springboot.service.GraphEntityService;
@@ -25,7 +26,6 @@ import org.example.springboot.util.GraphIdGenerator;
 import org.example.springboot.util.GraphJsonUtils;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import tools.jackson.core.type.TypeReference;
@@ -48,6 +48,7 @@ public class GraphImportServiceImpl implements GraphImportService {
     private final GraphVersionMapper graphVersionMapper;
     private final GraphEntityService graphEntityService;
     private final GraphRelationService graphRelationService;
+    private final Neo4jGraphRepository neo4jGraphRepository;
     private final OperationLogService operationLogService;
 
     @Override
@@ -56,7 +57,7 @@ public class GraphImportServiceImpl implements GraphImportService {
         if ("entity".equals(templateType)) {
             content = "name,typeCode,description,source,status,propertiesJson\nYJ-002,oil_well,新建油井实体,人工录入,1,{\"wellDepth\":\"3500\",\"unit\":\"m\"}\n";
         } else if ("relation".equals(templateType)) {
-            content = "sourceEntityId,targetEntityId,relationTypeCode,description,status,propertiesJson\nENT_10001,ENT_10002,belongs_to,油井属于井段,1,{\"source\":\"人工录入\"}\n";
+            content = "sourceEntityName,targetEntityName,relationTypeCode,description,status,propertiesJson\n刮刀钻头,钻头,belongs_to,刮刀钻头属于钻头类型,1,{\"source\":\"人工录入\"}\n";
         } else {
             throw new BusinessException(ErrorCode.BAD_REQUEST.getCode(), "templateType只支持entity或relation");
         }
@@ -64,7 +65,6 @@ public class GraphImportServiceImpl implements GraphImportService {
     }
 
     @Override
-    @Transactional
     public GraphImportSubmitResponse importGraph(MultipartFile file, String importType, String versionRemark) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST.getCode(), "上传文件不能为空");
@@ -72,9 +72,10 @@ public class GraphImportServiceImpl implements GraphImportService {
         if (!StringUtils.hasText(importType)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST.getCode(), "importType不能为空");
         }
+        String normalizedImportType = importType.trim();
 
         GraphImportTaskRecord task = new GraphImportTaskRecord();
-        task.setImportType(importType);
+        task.setImportType(normalizedImportType);
         task.setFileName(file.getOriginalFilename());
         task.setStatus("PROCESSING");
         task.setTotalCount(0);
@@ -113,7 +114,7 @@ public class GraphImportServiceImpl implements GraphImportService {
             totalCount = lines.size() - 1;
             for (int i = 1; i < lines.size(); i++) {
                 try {
-                    handleLine(importType, lines.get(i));
+                    handleLine(normalizedImportType, lines.get(i));
                     successCount++;
                 } catch (Exception ex) {
                     failCount++;
@@ -133,7 +134,7 @@ public class GraphImportServiceImpl implements GraphImportService {
         task.setErrorRows(GraphJsonUtils.toJsonList(errorRows));
         task.setFinishedAt(LocalDateTime.now());
         graphImportTaskMapper.updateResult(task);
-        operationLogService.save("图谱导入管理", "执行导入", "/api/admin/graph/import", Map.of("importType", importType, "fileName", file.getOriginalFilename()), 1, null);
+        operationLogService.save("图谱导入管理", "执行导入", "/api/admin/graph/import", Map.of("importType", normalizedImportType, "fileName", file.getOriginalFilename()), 1, null);
         return new GraphImportSubmitResponse(task.getId());
     }
 
@@ -200,8 +201,9 @@ public class GraphImportServiceImpl implements GraphImportService {
         }
         if ("relation".equals(importType)) {
             GraphRelationCreateRequest request = new GraphRelationCreateRequest();
-            request.setSourceEntityId(getColumn(columns, 0));
-            request.setTargetEntityId(getColumn(columns, 1));
+            // 关系导入面向爬虫使用实体名称匹配，避免批量导入前额外查询实体ID。
+            request.setSourceEntityId(resolveEntityIdByName(getColumn(columns, 0), "sourceEntityName"));
+            request.setTargetEntityId(resolveEntityIdByName(getColumn(columns, 1), "targetEntityName"));
             request.setRelationTypeCode(getColumn(columns, 2));
             request.setDescription(getColumn(columns, 3));
             request.setStatus(parseInt(getColumn(columns, 4), 1));
@@ -212,6 +214,18 @@ public class GraphImportServiceImpl implements GraphImportService {
         throw new BusinessException(422, "当前仅支持entity和relation导入");
     }
 
+    private String resolveEntityIdByName(String entityName, String fieldName) {
+        if (!StringUtils.hasText(entityName)) {
+            throw new BusinessException(422, fieldName + "不能为空");
+        }
+        // 实体名称已被约束为全局唯一，因此关系导入可按名称精确定位真实实体ID。
+        var entity = neo4jGraphRepository.findEntityByName(entityName.trim());
+        if (entity == null) {
+            throw new BusinessException(422, fieldName + "对应实体不存在");
+        }
+        return entity.getId();
+    }
+
     private List<String> splitCsvLine(String line) {
         List<String> result = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -219,6 +233,12 @@ public class GraphImportServiceImpl implements GraphImportService {
         for (int i = 0; i < line.length(); i++) {
             char ch = line.charAt(i);
             if (ch == '"') {
+                // CSV 标准用两个双引号表示字段内的一个双引号，主要用于包裹 propertiesJson。
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++;
+                    continue;
+                }
                 inQuotes = !inQuotes;
                 continue;
             }
