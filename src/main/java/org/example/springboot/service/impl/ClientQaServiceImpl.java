@@ -9,11 +9,11 @@ import org.example.springboot.dto.ClientChatResponse;
 import org.example.springboot.dto.ClientChatTimingsResponse;
 import org.example.springboot.dto.ClientEvidenceEntityResponse;
 import org.example.springboot.dto.ClientEvidenceGraphDataResponse;
+import org.example.springboot.dto.ClientEvidenceGraphEdgeResponse;
+import org.example.springboot.dto.ClientEvidenceGraphNodeResponse;
 import org.example.springboot.dto.ClientEvidenceRelationResponse;
 import org.example.springboot.dto.ClientEvidenceResponse;
 import org.example.springboot.dto.ClientEvidenceSourceResponse;
-import org.example.springboot.dto.GraphEdgeResponse;
-import org.example.springboot.dto.GraphNodeResponse;
 import org.example.springboot.entity.ExceptionLogRecord;
 import org.example.springboot.entity.GraphEntityRecord;
 import org.example.springboot.entity.GraphRelationRecord;
@@ -303,17 +303,22 @@ public class ClientQaServiceImpl implements ClientQaService {
                     .edges(List.of())
                     .build();
         }
-        Map<String, GraphNodeResponse> nodeMap = new LinkedHashMap<>();
+        Map<String, ClientEvidenceGraphNodeResponse> nodeMap = new LinkedHashMap<>();
         for (Map<String, Object> item : entityMaps) {
             String id = stringValue(item.get("id"));
             if (!StringUtils.hasText(id)) {
                 continue;
             }
-            nodeMap.put(id, GraphNodeResponse.builder()
+            String name = stringValue(item.get("name"));
+            String typeName = stringValue(item.get("typeName"));
+            nodeMap.put(id, ClientEvidenceGraphNodeResponse.builder()
                     .id(id)
-                    .name(stringValue(item.get("name")))
+                    .name(name)
                     .typeCode(stringValue(item.get("typeCode")))
-                    .typeName(stringValue(item.get("typeName")))
+                    .typeName(typeName)
+                    .entityId(id)
+                    .entityName(name)
+                    .entityType(StringUtils.hasText(typeName) ? typeName : stringValue(item.get("typeCode")))
                     .properties(buildNodeProperties(item.get("description")))
                     .build());
         }
@@ -321,36 +326,52 @@ public class ClientQaServiceImpl implements ClientQaService {
             String sourceId = stringValue(item.get("sourceEntityId"));
             String targetId = stringValue(item.get("targetEntityId"));
             if (StringUtils.hasText(sourceId) && !nodeMap.containsKey(sourceId)) {
-                nodeMap.put(sourceId, GraphNodeResponse.builder()
+                String sourceName = stringValue(item.get("sourceEntityName"));
+                nodeMap.put(sourceId, ClientEvidenceGraphNodeResponse.builder()
                         .id(sourceId)
-                        .name(stringValue(item.get("sourceEntityName")))
+                        .name(sourceName)
                         .typeCode(null)
                         .typeName(null)
+                        .entityId(sourceId)
+                        .entityName(sourceName)
+                        .entityType(null)
                         .properties(Map.of())
                         .build());
             }
             if (StringUtils.hasText(targetId) && !nodeMap.containsKey(targetId)) {
-                nodeMap.put(targetId, GraphNodeResponse.builder()
+                String targetName = stringValue(item.get("targetEntityName"));
+                nodeMap.put(targetId, ClientEvidenceGraphNodeResponse.builder()
                         .id(targetId)
-                        .name(stringValue(item.get("targetEntityName")))
+                        .name(targetName)
                         .typeCode(null)
                         .typeName(null)
+                        .entityId(targetId)
+                        .entityName(targetName)
+                        .entityType(null)
                         .properties(Map.of())
                         .build());
             }
         }
-        List<GraphNodeResponse> nodes = new ArrayList<>(nodeMap.values());
-        List<GraphEdgeResponse> edges = relationMaps.stream()
-                .map(item -> GraphEdgeResponse.builder()
+        List<ClientEvidenceGraphNodeResponse> nodes = new ArrayList<>(nodeMap.values());
+        List<ClientEvidenceGraphEdgeResponse> edges = relationMaps.stream()
+                .map(item -> {
+                    String relationTypeName = stringValue(item.get("relationTypeName"));
+                    return ClientEvidenceGraphEdgeResponse.builder()
                         .id(stringValue(item.get("id")))
                         .source(stringValue(item.get("sourceEntityId")))
                         .target(stringValue(item.get("targetEntityId")))
+                        .sourceId(stringValue(item.get("sourceEntityId")))
+                        .targetId(stringValue(item.get("targetEntityId")))
+                        .sourceName(stringValue(item.get("sourceEntityName")))
+                        .targetName(stringValue(item.get("targetEntityName")))
                         .relationTypeCode(stringValue(item.get("relationTypeCode")))
-                        .relationTypeName(stringValue(item.get("relationTypeName")))
+                        .relationTypeName(relationTypeName)
+                        .relationType(relationTypeName)
                         .description(stringValue(item.get("description")))
-                        .build())
+                        .build();
+                })
                 .toList();
-        GraphNodeResponse center = !nodes.isEmpty() ? nodes.get(0) : null;
+        ClientEvidenceGraphNodeResponse center = !nodes.isEmpty() ? nodes.get(0) : null;
         return ClientEvidenceGraphDataResponse.builder()
                 .center(center)
                 .nodes(nodes)
@@ -518,8 +539,17 @@ public class ClientQaServiceImpl implements ClientQaService {
     private Map<String, Object> queryGraph(String question, Map<String, Object> nlpResult) {
         List<GraphEntityRecord> entities = new ArrayList<>();
         Set<String> addedEntityIds = new LinkedHashSet<>();
+        // 中文问句通常包含完整实体名，先按“问题包含实体名”召回，避免只用分词导致漏命中。
+        for (GraphEntityRecord candidate : neo4jGraphRepository.findEntitiesMentionedInText(question, 5)) {
+            if (addedEntityIds.add(candidate.getId())) {
+                entities.add(candidate);
+            }
+        }
         List<String> keywords = (List<String>) nlpResult.get("keywords");
         for (String keyword : keywords) {
+            if (entities.size() >= 5) {
+                break;
+            }
             List<GraphEntityRecord> candidates = neo4jGraphRepository.searchEntityOptions(keyword, null, 5);
             for (GraphEntityRecord candidate : candidates) {
                 if (addedEntityIds.add(candidate.getId())) {

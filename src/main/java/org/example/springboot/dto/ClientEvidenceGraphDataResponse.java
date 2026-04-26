@@ -12,7 +12,7 @@ import java.util.List;
 @Builder
 public class ClientEvidenceGraphDataResponse {
 
-    private GraphNodeResponse center;
-    private List<GraphNodeResponse> nodes;
-    private List<GraphEdgeResponse> edges;
+    private ClientEvidenceGraphNodeResponse center;
+    private List<ClientEvidenceGraphNodeResponse> nodes;
+    private List<ClientEvidenceGraphEdgeResponse> edges;
 }

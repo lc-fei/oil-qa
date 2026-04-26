@@ -101,6 +101,28 @@ public class Neo4jGraphRepository {
         });
     }
 
+    public List<GraphEntityRecord> findEntitiesMentionedInText(String text, int limit) {
+        String cypher = """
+                MATCH (n:GraphEntity)
+                WHERE n.status = 1
+                  AND $text CONTAINS n.name
+                RETURN n
+                ORDER BY size(n.name) DESC, n.updatedAt DESC, n.id DESC
+                LIMIT $limit
+                """;
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("text", text);
+        params.put("limit", limit);
+        return executeRead(cypher, params, result -> {
+            List<GraphEntityRecord> records = new ArrayList<>();
+            while (result.hasNext()) {
+                Record row = result.next();
+                records.add(toEntityRecord(row.get("n").asNode(), 0));
+            }
+            return records;
+        });
+    }
+
     public GraphEntityRecord findEntityById(String id) {
         String cypher = """
                 MATCH (n:GraphEntity {id: $id})
