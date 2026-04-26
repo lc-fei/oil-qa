@@ -195,7 +195,7 @@ public class MonitorServiceImpl implements MonitorService {
 
     @Override
     public List<MonitorTrendPointResponse> getTrend(String metricType, String granularity, String startDate, String endDate) {
-        // 当前先按日统计表直出，后续如果支持周粒度，可在这里聚合转换。
+        // 趋势统计直接从问答请求明细实时聚合，避免依赖未调度的日统计任务导致大盘为空。
         List<MonitorDailyStatRecord> stats = monitorMapper.listDailyStats(startDate, endDate);
         return stats.stream()
                 .map(stat -> new MonitorTrendPointResponse(stat.getStatDate().toString(), metricValue(metricType, stat)))
@@ -212,19 +212,16 @@ public class MonitorServiceImpl implements MonitorService {
 
     @Override
     public MonitorPerformanceResponse getPerformance(String startTime, String endTime) {
-        // 性能看板优先复用日聚合数据，阶段平均耗时再分别从明细表补充统计。
-        List<MonitorDailyStatRecord> stats = monitorMapper.listDailyStats(
-                extractDate(startTime, LocalDate.now().minusDays(6)),
-                extractDate(endTime, LocalDate.now())
-        );
-        long totalRequests = stats.stream().mapToLong(item -> nullSafeInt(item.getRequestCount())).sum();
-        long totalSuccess = stats.stream().mapToLong(item -> nullSafeInt(item.getSuccessCount())).sum();
-        long totalGraphHit = stats.stream().mapToLong(item -> nullSafeInt(item.getGraphHitCount())).sum();
-        long totalAiCalls = stats.stream().mapToLong(item -> nullSafeInt(item.getAiCallCount())).sum();
-        long totalAiFails = stats.stream().mapToLong(item -> nullSafeInt(item.getAiFailCount())).sum();
+        // 性能看板按时间窗口直接统计明细表，保证用户端聊天产生数据后管理端立即可见。
+        Map<String, Object> summary = monitorMapper.summarizePerformance(startTime, endTime);
+        long totalRequests = longValue(summary.get("totalRequests"));
+        long totalSuccess = longValue(summary.get("totalSuccess"));
+        long totalGraphHit = longValue(summary.get("totalGraphHit"));
+        long totalAiCalls = longValue(summary.get("totalAiCalls"));
+        long totalAiFails = longValue(summary.get("totalAiFails"));
         return MonitorPerformanceResponse.builder()
-                .avgResponseTimeMs(avg(stats.stream().map(item -> doubleValue(item.getAvgResponseTimeMs())).toList()))
-                .p95ResponseTimeMs(avg(stats.stream().map(item -> doubleValue(item.getP95ResponseTimeMs())).toList()))
+                .avgResponseTimeMs(doubleValue(summary.get("avgResponseTimeMs")))
+                .p95ResponseTimeMs(zeroIfNull(monitorMapper.p95ResponseDuration(startTime, endTime)))
                 .nlpAvgDurationMs(zeroIfNull(monitorMapper.avgNlpDuration(startTime, endTime)))
                 .graphAvgDurationMs(zeroIfNull(monitorMapper.avgGraphDuration(startTime, endTime)))
                 .promptAvgDurationMs(zeroIfNull(monitorMapper.avgPromptDuration(startTime, endTime)))
@@ -299,13 +296,6 @@ public class MonitorServiceImpl implements MonitorService {
         return new String[]{today + " 00:00:00", today + " 23:59:59"};
     }
 
-    private String extractDate(String dateTime, LocalDate fallback) {
-        if (dateTime == null || dateTime.length() < 10) {
-            return fallback.toString();
-        }
-        return dateTime.substring(0, 10);
-    }
-
     private List<String> parseStringList(String json) {
         // 列表字段在库中按 JSON 字符串存储，这里统一转换为前端直接可消费的结构。
         return GraphJsonUtils.toList(json, new TypeReference<>() {
@@ -334,13 +324,6 @@ public class MonitorServiceImpl implements MonitorService {
             return 0D;
         }
         return round((double) nullSafeInt(numerator) / denominatorValue);
-    }
-
-    private Double avg(List<Double> values) {
-        if (values.isEmpty()) {
-            return 0D;
-        }
-        return round(values.stream().mapToDouble(Double::doubleValue).average().orElse(0D));
     }
 
     private boolean intToBool(Integer value) {

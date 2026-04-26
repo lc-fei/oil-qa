@@ -74,6 +74,7 @@ public class ClientQaServiceImpl implements ClientQaService {
 
     @Override
     public ClientChatResponse chat(ClientChatRequest request) {
+        // 聊天主链路必须绑定当前登录用户，后续会话、消息和监控记录都依赖该用户上下文。
         UserPrincipal principal = requirePrincipal();
         String question = normalizeQuestion(request.getQuestion());
         String contextMode = normalizeContextMode(request.getContextMode());
@@ -81,48 +82,64 @@ public class ClientQaServiceImpl implements ClientQaService {
         request.setContextMode(contextMode);
         request.setAnswerMode(answerMode);
         LocalDateTime startTime = LocalDateTime.now();
+
+        // 用户可继续已有会话；未传会话时按当前问题自动创建一条新会话。
         Long sessionId = request.getSessionId();
         QaSession session = sessionId == null ? null : requireSession(sessionId, principal.getId());
         if (session == null) {
             session = createSession(principal.getId(), buildSessionTitle(question));
         }
 
+        // requestNo 是本次问答在消息表、监控表、依据接口之间串联的唯一业务编号。
         String requestNo = QaBusinessIdGenerator.nextRequestNo();
         String traceId = requestNo;
         QaMessage message = createProcessingMessage(session.getId(), requestNo, question);
         MonitorRequestRecord requestRecord = createRequestRecord(principal, requestNo, traceId, question, startTime);
         clientQaChatMapper.insertRequest(requestRecord);
 
-        long nlpStartedAt = System.currentTimeMillis();
-        Map<String, Object> nlpResult = analyzeQuestion(question);
-        int nlpDurationMs = elapsed(nlpStartedAt);
-        clientQaChatMapper.insertNlp(buildNlpRecord(requestNo, nlpResult, nlpDurationMs));
-
-        long graphStartedAt = System.currentTimeMillis();
-        Map<String, Object> graphResult = "LLM_ONLY".equalsIgnoreCase(answerMode)
-                ? emptyGraphResult()
-                : queryGraph(question, nlpResult);
-        int graphDurationMs = "LLM_ONLY".equalsIgnoreCase(answerMode) ? 0 : elapsed(graphStartedAt);
-        clientQaChatMapper.insertGraph(buildGraphRecord(requestNo, question, graphResult, graphDurationMs));
-
-        long promptStartedAt = System.currentTimeMillis();
-        String prompt = buildPrompt(question, request, session.getId(), graphResult);
-        int promptDurationMs = elapsed(promptStartedAt);
-        clientQaChatMapper.insertPrompt(buildPromptRecord(requestNo, question, prompt, graphResult, promptDurationMs));
-
         String answer;
-        int aiDurationMs;
+        int nlpDurationMs = 0;
+        int graphDurationMs = 0;
+        int promptDurationMs = 0;
+        int aiDurationMs = 0;
         Integer aiStatusCode = null;
+        Map<String, Object> nlpResult = emptyNlpResult(question);
+        Map<String, Object> graphResult = emptyGraphResult();
+        long aiStartedAt = 0L;
         try {
-            long aiStartedAt = System.currentTimeMillis();
+            // NLP 当前为轻量规则实现，主要产出关键词、意图和置信度，供图谱召回和 evidence 摘要使用。
+            long nlpStartedAt = System.currentTimeMillis();
+            nlpResult = analyzeQuestion(question);
+            nlpDurationMs = elapsed(nlpStartedAt);
+            clientQaChatMapper.insertNlp(buildNlpRecord(requestNo, nlpResult, nlpDurationMs));
+
+            // GRAPH_ENHANCED 模式执行 Neo4j 检索；LLM_ONLY 明确跳过图谱，避免产生误导性依据。
+            long graphStartedAt = System.currentTimeMillis();
+            graphResult = "LLM_ONLY".equalsIgnoreCase(answerMode)
+                    ? emptyGraphResult()
+                    : queryGraph(question, nlpResult);
+            graphDurationMs = "LLM_ONLY".equalsIgnoreCase(answerMode) ? 0 : elapsed(graphStartedAt);
+            clientQaChatMapper.insertGraph(buildGraphRecord(requestNo, question, graphResult, graphDurationMs));
+
+            // Prompt 汇总图谱依据、历史上下文和原始问题，后续 evidence 会复用 prompt 摘要作为来源说明。
+            long promptStartedAt = System.currentTimeMillis();
+            String prompt = buildPrompt(question, request, session.getId(), graphResult);
+            promptDurationMs = elapsed(promptStartedAt);
+            clientQaChatMapper.insertPrompt(buildPromptRecord(requestNo, question, prompt, graphResult, promptDurationMs));
+
+            // AI 调用当前接入阿里百炼兼容 OpenAI chat/completions 协议。
+            aiStartedAt = System.currentTimeMillis();
             AiCallResult aiResult = callBailian(prompt);
             aiDurationMs = elapsed(aiStartedAt);
             answer = aiResult.answer();
             aiStatusCode = aiResult.statusCode();
             clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, aiDurationMs, aiStatusCode, answer, null));
         } catch (Exception ex) {
-            int failedAiDuration = 0;
-            clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, failedAiDuration, aiStatusCode, null, ex.getMessage()));
+            // 主链路任一阶段失败都要闭合监控记录，避免管理端出现长期 PROCESSING 的脏数据。
+            if (aiStartedAt > 0L && aiDurationMs == 0) {
+                aiDurationMs = elapsed(aiStartedAt);
+            }
+            clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, aiDurationMs, aiStatusCode, null, ex.getMessage()));
             return buildFailedChatResponse(
                     ex,
                     principal,
@@ -137,7 +154,7 @@ public class ClientQaServiceImpl implements ClientQaService {
                     graphResult,
                     graphDurationMs,
                     promptDurationMs,
-                    failedAiDuration,
+                    aiDurationMs,
                     startTime
             );
         }
@@ -145,9 +162,11 @@ public class ClientQaServiceImpl implements ClientQaService {
         LocalDateTime finishedAt = LocalDateTime.now();
         int totalDurationMs = millisBetween(startTime, finishedAt);
         String answerSummary = summarizeAnswer(answer);
+        // 成功后统一回填消息、请求监控和会话更新时间，确保会话列表与 evidence 可通过 requestNo 串联。
         updateSuccessArtifacts(principal, session, question, message, requestNo, answer, answerSummary, finishedAt, totalDurationMs, graphResult);
         clientQaChatMapper.touchSession(session.getId(), principal.getId(), buildSessionTitle(question), finishedAt);
 
+        // chat 响应只返回轻量依据摘要；完整知识依据由 evidence 接口按 messageId 懒加载。
         return ClientChatResponse.builder()
                 .sessionId(session.getId())
                 .sessionNo(session.getSessionNo())
@@ -278,6 +297,16 @@ public class ClientQaServiceImpl implements ClientQaService {
         result.put("entities", List.of());
         result.put("relations", List.of());
         result.put("propertySummary", List.of());
+        return result;
+    }
+
+    private Map<String, Object> emptyNlpResult(String question) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("tokens", List.of());
+        result.put("keywords", List.of());
+        result.put("intent", "KNOWLEDGE_QA");
+        result.put("confidence", 0.35D);
+        result.put("raw", Map.of("questionLength", question.length(), "tokenCount", 0));
         return result;
     }
 
@@ -498,6 +527,7 @@ public class ClientQaServiceImpl implements ClientQaService {
     }
 
     private Map<String, Object> analyzeQuestion(String question) {
+        // 轻量 NLP 只做确定性关键词抽取，避免在主链路中引入额外模型依赖。
         List<String> tokens = extractTokens(question);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("tokens", tokens);
@@ -510,6 +540,7 @@ public class ClientQaServiceImpl implements ClientQaService {
 
     private List<String> extractTokens(String question) {
         Set<String> tokens = new LinkedHashSet<>();
+        // 中文标点先归一为空格，便于保留较完整的实体片段作为图谱召回关键词。
         String normalized = question.replaceAll("[，。！？、：；,.!?/\\\\()（）\\[\\]【】\"'“”‘’]", " ");
         for (String part : normalized.split("\\s+")) {
             String token = part.trim();
@@ -518,6 +549,7 @@ public class ClientQaServiceImpl implements ClientQaService {
             }
         }
         if (tokens.isEmpty() && normalized.length() >= 2) {
+            // 没有明显分隔词时截取问题前缀兜底，保证后续图谱检索至少有一个关键词。
             tokens.add(normalized.substring(0, Math.min(6, normalized.length())));
         }
         return new ArrayList<>(tokens).subList(0, Math.min(tokens.size(), 8));
@@ -564,6 +596,7 @@ public class ClientQaServiceImpl implements ClientQaService {
             }
         }
         if (entities.isEmpty()) {
+            // 若实体提及和关键词均未命中，再用完整问题模糊查一次，提升短问题的召回概率。
             for (GraphEntityRecord candidate : neo4jGraphRepository.searchEntityOptions(question, null, 5)) {
                 if (addedEntityIds.add(candidate.getId())) {
                     entities.add(candidate);
@@ -573,6 +606,7 @@ public class ClientQaServiceImpl implements ClientQaService {
 
         List<GraphRelationRecord> relations = new ArrayList<>();
         Set<String> relationIds = new LinkedHashSet<>();
+        // evidence 面板需要关系链路，因此对命中实体补充一跳关系，并限制数量避免响应过大。
         for (GraphEntityRecord entity : entities) {
             for (GraphRelationRecord relation : neo4jGraphRepository.pageEntityRelations(entity.getId(), "all", 0, 5)) {
                 if (relationIds.add(relation.getId())) {
@@ -601,6 +635,7 @@ public class ClientQaServiceImpl implements ClientQaService {
         MonitorGraphRecord record = new MonitorGraphRecord();
         record.setRequestNo(requestNo);
         record.setQueryCondition(GraphJsonUtils.toJson(Map.of("question", question)));
+        // hit_entity_list 和 hit_relation_list 是 evidence 接口的数据源，chat 后不再实时查询重算。
         record.setHitEntityList(GraphJsonUtils.toJsonList(entities.stream().map(this::toEntityMap).toList()));
         record.setHitRelationList(GraphJsonUtils.toJsonList(relations.stream().map(this::toRelationMap).toList()));
         record.setHitPropertySummary(GraphJsonUtils.toJsonList((List<?>) graphResult.get("propertySummary")));
@@ -615,10 +650,12 @@ public class ClientQaServiceImpl implements ClientQaService {
         if ("LLM_ONLY".equalsIgnoreCase(request.getAnswerMode())) {
             builder.append("本次回答模式：仅基于通用模型能力回答，不强制依赖图谱事实。\n");
         } else {
+            // 图谱增强模式把检索结果显式写入 Prompt，引导模型优先依据结构化事实回答。
             builder.append("已检索到的图谱依据：\n");
             appendGraphFacts(builder, graphResult);
         }
         if ("ON".equalsIgnoreCase(request.getContextMode())) {
+            // 上下文只取最近几轮，控制 prompt 长度并降低历史噪声。
             builder.append("\n历史上下文：\n");
             appendConversationHistory(builder, sessionId);
         }
@@ -769,8 +806,10 @@ public class ClientQaServiceImpl implements ClientQaService {
                                    ClientChatRequest request,
                                    String requestNo,
                                    String traceId,
-                                   QaMessage message) {
+                                   QaMessage message,
+                                   int totalDurationMs) {
         LocalDateTime finishedAt = LocalDateTime.now();
+        // 失败响应写回同一条消息，前端可在原消息位置展示失败态而不是丢失会话记录。
         message.setAnswerText("当前回答生成失败，请稍后重试。");
         message.setAnswerSummary("回答生成失败");
         message.setMessageStatus("FAILED");
@@ -782,13 +821,14 @@ public class ClientQaServiceImpl implements ClientQaService {
         requestRecord.setRequestStatus("FAILED");
         requestRecord.setFinalAnswer(message.getAnswerText());
         requestRecord.setAnswerSummary(message.getAnswerSummary());
-        requestRecord.setTotalDurationMs(0);
+        requestRecord.setTotalDurationMs(totalDurationMs);
         requestRecord.setGraphHit(0);
         requestRecord.setAiCallStatus("FAILED");
         requestRecord.setExceptionFlag(1);
         requestRecord.setFinishedAt(finishedAt);
         clientQaChatMapper.updateRequestResult(requestRecord);
 
+        // 异常日志保留请求参数和用户上下文，支撑管理端运行监控/异常日志排查。
         ExceptionLogRecord exceptionLog = new ExceptionLogRecord();
         exceptionLog.setExceptionNo("EX_" + requestNo);
         exceptionLog.setRequestNo(requestNo);
@@ -839,9 +879,9 @@ public class ClientQaServiceImpl implements ClientQaService {
                                                        int promptDurationMs,
                                                        int aiDurationMs,
                                                        LocalDateTime startTime) {
-        handleChatFailure(ex, principal, request, requestNo, traceId, message);
         LocalDateTime finishedAt = LocalDateTime.now();
         int totalDurationMs = millisBetween(startTime, finishedAt);
+        handleChatFailure(ex, principal, request, requestNo, traceId, message, totalDurationMs);
         clientQaChatMapper.touchSession(session.getId(), principal.getId(), buildSessionTitle(question), finishedAt);
         return ClientChatResponse.builder()
                 .sessionId(session.getId())

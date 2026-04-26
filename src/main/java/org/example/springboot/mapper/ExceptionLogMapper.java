@@ -2,6 +2,8 @@ package org.example.springboot.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.SelectProvider;
 import org.apache.ibatis.annotations.Update;
@@ -16,6 +18,20 @@ import java.util.Map;
  */
 @Mapper
 public interface ExceptionLogMapper {
+
+    @Insert("""
+            INSERT INTO sys_exception_log (
+                exception_no, request_no, trace_id, exception_module, exception_level, exception_type,
+                exception_message, stack_trace, request_uri, request_method, request_param_summary, context_info,
+                handle_status, handle_remark, handler_id, handler_name, occurred_at, handled_at
+            ) VALUES (
+                #{exceptionNo}, #{requestNo}, #{traceId}, #{exceptionModule}, #{exceptionLevel}, #{exceptionType},
+                #{exceptionMessage}, #{stackTrace}, #{requestUri}, #{requestMethod}, #{requestParamSummary}, #{contextInfo},
+                #{handleStatus}, #{handleRemark}, #{handlerId}, #{handlerName}, #{occurredAt}, #{handledAt}
+            )
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insert(ExceptionLogRecord record);
 
     @SelectProvider(type = ExceptionLogSqlProvider.class, method = "buildCount")
     long countPage(ExceptionLogPageQuery query);

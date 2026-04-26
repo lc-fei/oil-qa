@@ -73,27 +73,67 @@ public interface MonitorMapper {
 
     @Select("""
             SELECT
-                COALESCE(SUM(request_count), 0) AS totalQaCount,
-                COALESCE(SUM(success_count), 0) AS successQaCount,
-                COALESCE(SUM(fail_count), 0) AS failedQaCount,
-                COALESCE(AVG(avg_response_time_ms), 0) AS avgResponseTimeMs,
-                COALESCE(SUM(ai_call_count), 0) AS aiCallCount,
-                COALESCE(SUM(graph_hit_count), 0) AS graphHitCount,
-                COALESCE(SUM(exception_count), 0) AS exceptionCount
-            FROM qa_daily_stat
-            WHERE (#{startTime} IS NULL OR stat_date >= DATE(#{startTime}))
-              AND (#{endTime} IS NULL OR stat_date <= DATE(#{endTime}))
+                COUNT(1) AS totalQaCount,
+                COALESCE(SUM(CASE WHEN request_status = 'SUCCESS' THEN 1 ELSE 0 END), 0) AS successQaCount,
+                COALESCE(SUM(CASE WHEN request_status = 'FAILED' THEN 1 ELSE 0 END), 0) AS failedQaCount,
+                COALESCE(AVG(total_duration_ms), 0) AS avgResponseTimeMs,
+                COALESCE(SUM(CASE WHEN ai_call_status IS NOT NULL THEN 1 ELSE 0 END), 0) AS aiCallCount,
+                COALESCE(SUM(CASE WHEN graph_hit = 1 THEN 1 ELSE 0 END), 0) AS graphHitCount,
+                COALESCE(SUM(CASE WHEN exception_flag = 1 THEN 1 ELSE 0 END), 0) AS exceptionCount
+            FROM qa_request
+            WHERE (#{startTime} IS NULL OR created_at >= #{startTime})
+              AND (#{endTime} IS NULL OR created_at <= #{endTime})
             """)
     Map<String, Object> summarizeOverview(@Param("startTime") String startTime, @Param("endTime") String endTime);
 
     @Select("""
-            SELECT *
-            FROM qa_daily_stat
-            WHERE stat_date >= #{startDate}
-              AND stat_date <= #{endDate}
-            ORDER BY stat_date ASC
+            SELECT
+                DATE(created_at) AS stat_date,
+                COUNT(1) AS request_count,
+                COALESCE(SUM(CASE WHEN request_status = 'SUCCESS' THEN 1 ELSE 0 END), 0) AS success_count,
+                COALESCE(SUM(CASE WHEN request_status = 'FAILED' THEN 1 ELSE 0 END), 0) AS fail_count,
+                COALESCE(SUM(CASE WHEN exception_flag = 1 THEN 1 ELSE 0 END), 0) AS exception_count,
+                COALESCE(AVG(total_duration_ms), 0) AS avg_response_time_ms,
+                COALESCE(MAX(total_duration_ms), 0) AS p95_response_time_ms,
+                COALESCE(SUM(CASE WHEN graph_hit = 1 THEN 1 ELSE 0 END), 0) AS graph_hit_count,
+                COALESCE(SUM(CASE WHEN ai_call_status IS NOT NULL THEN 1 ELSE 0 END), 0) AS ai_call_count,
+                COALESCE(SUM(CASE WHEN ai_call_status = 'FAILED' THEN 1 ELSE 0 END), 0) AS ai_fail_count
+            FROM qa_request
+            WHERE DATE(created_at) >= #{startDate}
+              AND DATE(created_at) <= #{endDate}
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at) ASC
             """)
     List<MonitorDailyStatRecord> listDailyStats(@Param("startDate") String startDate, @Param("endDate") String endDate);
+
+    @Select("""
+            SELECT
+                COUNT(1) AS totalRequests,
+                COALESCE(SUM(CASE WHEN request_status = 'SUCCESS' THEN 1 ELSE 0 END), 0) AS totalSuccess,
+                COALESCE(SUM(CASE WHEN graph_hit = 1 THEN 1 ELSE 0 END), 0) AS totalGraphHit,
+                COALESCE(SUM(CASE WHEN ai_call_status IS NOT NULL THEN 1 ELSE 0 END), 0) AS totalAiCalls,
+                COALESCE(SUM(CASE WHEN ai_call_status = 'FAILED' THEN 1 ELSE 0 END), 0) AS totalAiFails,
+                COALESCE(AVG(total_duration_ms), 0) AS avgResponseTimeMs
+            FROM qa_request
+            WHERE (#{startTime} IS NULL OR created_at >= #{startTime})
+              AND (#{endTime} IS NULL OR created_at <= #{endTime})
+            """)
+    Map<String, Object> summarizePerformance(@Param("startTime") String startTime, @Param("endTime") String endTime);
+
+    @Select("""
+            SELECT COALESCE(MIN(total_duration_ms), 0)
+            FROM (
+                SELECT
+                    total_duration_ms,
+                    CUME_DIST() OVER (ORDER BY total_duration_ms) AS duration_percentile
+                FROM qa_request
+                WHERE total_duration_ms IS NOT NULL
+                  AND (#{startTime} IS NULL OR created_at >= #{startTime})
+                  AND (#{endTime} IS NULL OR created_at <= #{endTime})
+            ) duration_rank
+            WHERE duration_percentile >= 0.95
+            """)
+    Double p95ResponseDuration(@Param("startTime") String startTime, @Param("endTime") String endTime);
 
     @Select("""
             SELECT question, COUNT(1) AS question_count

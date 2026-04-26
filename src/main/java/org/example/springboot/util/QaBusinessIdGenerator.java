@@ -25,4 +25,8 @@ public final class QaBusinessIdGenerator {
     public static String nextRequestNo() {
         return "REQ_" + FORMATTER.format(LocalDateTime.now()) + ThreadLocalRandom.current().nextInt(100, 1000);
     }
+
+    public static String nextExceptionNo() {
+        return "EX_" + FORMATTER.format(LocalDateTime.now()) + ThreadLocalRandom.current().nextInt(100, 1000);
+    }
 }
