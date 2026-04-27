@@ -26,9 +26,13 @@ CREATE TABLE IF NOT EXISTS qa_message (
     role VARCHAR(20) NOT NULL DEFAULT 'ASSISTANT',
     question_text TEXT NOT NULL,
     answer_text LONGTEXT DEFAULT NULL,
+    partial_answer LONGTEXT DEFAULT NULL,
     answer_summary TEXT DEFAULT NULL,
     message_status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+    stream_sequence INT NOT NULL DEFAULT 0,
     sequence_no INT NOT NULL DEFAULT 1,
+    last_stream_at DATETIME DEFAULT NULL,
+    interrupted_reason VARCHAR(255) DEFAULT NULL,
     is_deleted TINYINT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at DATETIME DEFAULT NULL,
@@ -36,8 +40,56 @@ CREATE TABLE IF NOT EXISTS qa_message (
     KEY idx_qa_message_session_id (session_id),
     KEY idx_qa_message_request_no (request_no),
     KEY idx_qa_message_status (message_status),
+    KEY idx_qa_message_last_stream_at (last_stream_at),
     KEY idx_qa_message_created_at (created_at)
 );
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS add_qa_message_stream_columns//
+
+CREATE PROCEDURE add_qa_message_stream_columns()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_message' AND COLUMN_NAME = 'partial_answer'
+    ) THEN
+        ALTER TABLE qa_message ADD COLUMN partial_answer LONGTEXT DEFAULT NULL AFTER answer_text;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_message' AND COLUMN_NAME = 'stream_sequence'
+    ) THEN
+        ALTER TABLE qa_message ADD COLUMN stream_sequence INT NOT NULL DEFAULT 0 AFTER message_status;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_message' AND COLUMN_NAME = 'last_stream_at'
+    ) THEN
+        ALTER TABLE qa_message ADD COLUMN last_stream_at DATETIME DEFAULT NULL AFTER sequence_no;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_message' AND COLUMN_NAME = 'interrupted_reason'
+    ) THEN
+        ALTER TABLE qa_message ADD COLUMN interrupted_reason VARCHAR(255) DEFAULT NULL AFTER last_stream_at;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_message' AND INDEX_NAME = 'idx_qa_message_last_stream_at'
+    ) THEN
+        ALTER TABLE qa_message ADD INDEX idx_qa_message_last_stream_at (last_stream_at);
+    END IF;
+END//
+
+DELIMITER ;
+
+CALL add_qa_message_stream_columns();
+DROP PROCEDURE add_qa_message_stream_columns;
 
 CREATE TABLE IF NOT EXISTS qa_message_favorite (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,

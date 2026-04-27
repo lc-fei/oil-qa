@@ -18,8 +18,11 @@ public class QaMessageResponse {
     private String requestNo;
     private String question;
     private String answer;
+    private String partialAnswer;
     private String answerSummary;
     private String status;
+    private Integer streamSequence;
+    private String interruptedReason;
     private Boolean favorite;
     private String feedbackType;
 

@@ -17,9 +17,13 @@ public class QaMessage {
     private String role;
     private String questionText;
     private String answerText;
+    private String partialAnswer;
     private String answerSummary;
     private String messageStatus;
+    private Integer streamSequence;
     private Integer sequenceNo;
+    private LocalDateTime lastStreamAt;
+    private String interruptedReason;
     private Integer isDeleted;
     private LocalDateTime createdAt;
     private LocalDateTime finishedAt;

@@ -82,9 +82,13 @@ public interface ClientQaMessageMapper {
                    m.role,
                    m.question_text,
                    m.answer_text,
+                   m.partial_answer,
                    m.answer_summary,
                    m.message_status,
+                   m.stream_sequence,
                    m.sequence_no,
+                   m.last_stream_at,
+                   m.interrupted_reason,
                    m.is_deleted,
                    m.created_at,
                    m.finished_at
@@ -99,9 +103,13 @@ public interface ClientQaMessageMapper {
             @org.apache.ibatis.annotations.Result(property = "requestNo", column = "request_no"),
             @org.apache.ibatis.annotations.Result(property = "questionText", column = "question_text"),
             @org.apache.ibatis.annotations.Result(property = "answerText", column = "answer_text"),
+            @org.apache.ibatis.annotations.Result(property = "partialAnswer", column = "partial_answer"),
             @org.apache.ibatis.annotations.Result(property = "answerSummary", column = "answer_summary"),
             @org.apache.ibatis.annotations.Result(property = "messageStatus", column = "message_status"),
+            @org.apache.ibatis.annotations.Result(property = "streamSequence", column = "stream_sequence"),
             @org.apache.ibatis.annotations.Result(property = "sequenceNo", column = "sequence_no"),
+            @org.apache.ibatis.annotations.Result(property = "lastStreamAt", column = "last_stream_at"),
+            @org.apache.ibatis.annotations.Result(property = "interruptedReason", column = "interrupted_reason"),
             @org.apache.ibatis.annotations.Result(property = "isDeleted", column = "is_deleted"),
             @org.apache.ibatis.annotations.Result(property = "createdAt", column = "created_at"),
             @org.apache.ibatis.annotations.Result(property = "finishedAt", column = "finished_at")
@@ -116,9 +124,13 @@ public interface ClientQaMessageMapper {
                    m.role,
                    m.question_text,
                    m.answer_text,
+                   m.partial_answer,
                    m.answer_summary,
                    m.message_status,
+                   m.stream_sequence,
                    m.sequence_no,
+                   m.last_stream_at,
+                   m.interrupted_reason,
                    m.is_deleted,
                    m.created_at,
                    m.finished_at
@@ -162,4 +174,34 @@ public interface ClientQaMessageMapper {
               AND is_deleted = 0
             """)
     int logicalDeleteBySessionId(@Param("sessionId") Long sessionId);
+
+    @Select("""
+            SELECT m.id,
+                   m.message_no,
+                   m.session_id,
+                   m.request_no,
+                   m.role,
+                   m.question_text,
+                   m.answer_text,
+                   m.partial_answer,
+                   m.answer_summary,
+                   m.message_status,
+                   m.stream_sequence,
+                   m.sequence_no,
+                   m.last_stream_at,
+                   m.interrupted_reason,
+                   m.is_deleted,
+                   m.created_at,
+                   m.finished_at
+            FROM qa_message m
+            WHERE m.message_status = 'PROCESSING'
+              AND m.is_deleted = 0
+              AND m.last_stream_at IS NOT NULL
+              AND m.last_stream_at < #{deadline}
+            ORDER BY m.last_stream_at ASC, m.id ASC
+            LIMIT #{limit}
+            """)
+    @org.apache.ibatis.annotations.ResultMap("qaMessageResultMap")
+    List<QaMessage> findTimedOutProcessingMessages(@Param("deadline") java.time.LocalDateTime deadline,
+                                                   @Param("limit") Integer limit);
 }

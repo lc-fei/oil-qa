@@ -3,6 +3,8 @@ package org.example.springboot.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.example.springboot.common.ErrorCode;
 import org.example.springboot.config.BailianProperties;
+import org.example.springboot.dto.ClientCancelMessageRequest;
+import org.example.springboot.dto.ClientCancelMessageResponse;
 import org.example.springboot.dto.ClientChatEvidenceSummaryResponse;
 import org.example.springboot.dto.ClientChatRequest;
 import org.example.springboot.dto.ClientChatResponse;
@@ -14,6 +16,7 @@ import org.example.springboot.dto.ClientEvidenceGraphNodeResponse;
 import org.example.springboot.dto.ClientEvidenceRelationResponse;
 import org.example.springboot.dto.ClientEvidenceResponse;
 import org.example.springboot.dto.ClientEvidenceSourceResponse;
+import org.example.springboot.dto.ClientStreamEventResponse;
 import org.example.springboot.entity.ExceptionLogRecord;
 import org.example.springboot.entity.GraphEntityRecord;
 import org.example.springboot.entity.GraphRelationRecord;
@@ -37,6 +40,7 @@ import org.example.springboot.util.GraphJsonUtils;
 import org.example.springboot.util.QaBusinessIdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -55,6 +59,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * 用户端问答主链路服务实现。
@@ -64,6 +73,8 @@ import java.util.Set;
 public class ClientQaServiceImpl implements ClientQaService {
 
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+    private static final ExecutorService STREAM_EXECUTOR = Executors.newFixedThreadPool(16);
+    private static final Map<Long, AtomicBoolean> STREAM_CANCEL_FLAGS = new ConcurrentHashMap<>();
 
     private final ClientQaSessionMapper clientQaSessionMapper;
     private final ClientQaMessageMapper clientQaMessageMapper;
@@ -192,6 +203,135 @@ public class ClientQaServiceImpl implements ClientQaService {
                         .confidence((Double) nlpResult.get("confidence"))
                         .build())
                 .build();
+    }
+
+    @Override
+    public SseEmitter streamChat(ClientChatRequest request) {
+        UserPrincipal principal = requirePrincipal();
+        String question = normalizeQuestion(request.getQuestion());
+        request.setContextMode(normalizeContextMode(request.getContextMode()));
+        request.setAnswerMode(normalizeAnswerMode(request.getAnswerMode()));
+        SseEmitter emitter = new SseEmitter(0L);
+        STREAM_EXECUTOR.execute(() -> doStreamChat(principal, request, question, emitter));
+        return emitter;
+    }
+
+    @Override
+    public ClientCancelMessageResponse cancelMessage(Long messageId, ClientCancelMessageRequest request) {
+        UserPrincipal principal = requirePrincipal();
+        QaMessage message = clientQaMessageMapper.findByIdAndUserId(messageId, principal.getId());
+        if (message == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND.getCode(), "消息不存在");
+        }
+        if (!"PROCESSING".equals(message.getMessageStatus())) {
+            throw new BusinessException(ErrorCode.BUSINESS_VALIDATION_FAILED.getCode(), "仅支持取消生成中的消息");
+        }
+        if (StringUtils.hasText(request.getRequestNo()) && !request.getRequestNo().equals(message.getRequestNo())) {
+            throw new BusinessException(ErrorCode.BUSINESS_VALIDATION_FAILED.getCode(), "requestNo与消息不匹配");
+        }
+        String partialAnswer = defaultString(message.getPartialAnswer());
+        String finalStatus = StringUtils.hasText(partialAnswer) ? "PARTIAL_SUCCESS" : "INTERRUPTED";
+        String reason = StringUtils.hasText(request.getReason()) ? request.getReason() : "USER_CANCEL";
+        STREAM_CANCEL_FLAGS.computeIfAbsent(messageId, ignored -> new AtomicBoolean()).set(true);
+        finalizeInterruptedMessage(message, partialAnswer, finalStatus, reason);
+        MonitorRequestRecord requestRecord = new MonitorRequestRecord();
+        requestRecord.setRequestNo(message.getRequestNo());
+        requestRecord.setRequestStatus(toRequestStatus(finalStatus));
+        requestRecord.setFinalAnswer(partialAnswer);
+        requestRecord.setAnswerSummary(StringUtils.hasText(partialAnswer) ? summarizeAnswer(partialAnswer) : "回答生成中断");
+        requestRecord.setTotalDurationMs(0);
+        requestRecord.setGraphHit(0);
+        requestRecord.setAiCallStatus("FAILED");
+        requestRecord.setExceptionFlag(1);
+        requestRecord.setFinishedAt(LocalDateTime.now());
+        clientQaChatMapper.updateRequestResult(requestRecord);
+        return ClientCancelMessageResponse.builder()
+                .messageId(message.getId())
+                .requestNo(message.getRequestNo())
+                .status(finalStatus)
+                .answer(partialAnswer)
+                .interruptedReason(reason)
+                .build();
+    }
+
+    private void doStreamChat(UserPrincipal principal,
+                              ClientChatRequest request,
+                              String question,
+                              SseEmitter emitter) {
+        LocalDateTime startTime = LocalDateTime.now();
+        QaSession session = null;
+        QaMessage message = null;
+        String requestNo = QaBusinessIdGenerator.nextRequestNo();
+        String traceId = requestNo;
+        StringBuilder answerBuffer = new StringBuilder();
+        Map<String, Object> nlpResult = emptyNlpResult(question);
+        Map<String, Object> graphResult = emptyGraphResult();
+        int nlpDurationMs = 0;
+        int graphDurationMs = 0;
+        int promptDurationMs = 0;
+        int aiDurationMs = 0;
+        Integer aiStatusCode = null;
+        try {
+            session = prepareSession(principal, request.getSessionId(), question);
+            message = createProcessingMessage(session.getId(), requestNo, question);
+            STREAM_CANCEL_FLAGS.put(message.getId(), new AtomicBoolean(false));
+            clientQaChatMapper.insertRequest(createRequestRecord(principal, requestNo, traceId, question, startTime));
+            sendSse(emitter, "start", buildStreamEvent(requestNo, session, message, 0, "", false, null, null));
+
+            long nlpStartedAt = System.currentTimeMillis();
+            nlpResult = analyzeQuestion(question);
+            nlpDurationMs = elapsed(nlpStartedAt);
+            clientQaChatMapper.insertNlp(buildNlpRecord(requestNo, nlpResult, nlpDurationMs));
+
+            long graphStartedAt = System.currentTimeMillis();
+            graphResult = "LLM_ONLY".equalsIgnoreCase(request.getAnswerMode()) ? emptyGraphResult() : queryGraph(question, nlpResult);
+            graphDurationMs = "LLM_ONLY".equalsIgnoreCase(request.getAnswerMode()) ? 0 : elapsed(graphStartedAt);
+            clientQaChatMapper.insertGraph(buildGraphRecord(requestNo, question, graphResult, graphDurationMs));
+
+            long promptStartedAt = System.currentTimeMillis();
+            String prompt = buildPrompt(question, request, session.getId(), graphResult);
+            promptDurationMs = elapsed(promptStartedAt);
+            clientQaChatMapper.insertPrompt(buildPromptRecord(requestNo, question, prompt, graphResult, promptDurationMs));
+
+            int[] sequence = new int[]{0};
+            long aiStartedAt = System.currentTimeMillis();
+            QaSession finalSession = session;
+            QaMessage finalMessage = message;
+            Map<String, Object> finalGraphResult = graphResult;
+            callBailianStream(prompt, delta -> {
+                if (!StringUtils.hasText(delta)) {
+                    return;
+                }
+                if (isStreamCancelled(finalMessage.getId())) {
+                    throw new StreamCancelledException("USER_CANCEL");
+                }
+                answerBuffer.append(delta);
+                sequence[0]++;
+                updateStreamProgress(finalMessage, answerBuffer.toString(), sequence[0]);
+                sendSse(emitter, "chunk", buildStreamEvent(requestNo, finalSession, finalMessage, sequence[0], delta, false, null, null));
+            });
+            if (isStreamCancelled(message.getId())) {
+                throw new StreamCancelledException("USER_CANCEL");
+            }
+            aiDurationMs = elapsed(aiStartedAt);
+            String answer = answerBuffer.toString();
+            if (!StringUtils.hasText(answer)) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR.getCode(), "阿里百炼返回回答为空");
+            }
+            aiStatusCode = 200;
+            clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, aiDurationMs, aiStatusCode, answer, null));
+            ClientChatResponse result = buildSuccessStreamResult(principal, request, session, message, requestNo, question, answer, nlpResult, graphResult, nlpDurationMs, graphDurationMs, promptDurationMs, aiDurationMs, startTime);
+            sendSse(emitter, "done", buildStreamEvent(requestNo, session, message, sequence[0], "", true, null, result));
+            emitter.complete();
+        } catch (StreamCancelledException ex) {
+            handleStreamError(emitter, ex, principal, request, session, message, requestNo, traceId, question, answerBuffer.toString(), nlpResult, graphResult, nlpDurationMs, graphDurationMs, promptDurationMs, aiDurationMs, startTime, ex.getMessage());
+        } catch (Exception ex) {
+            handleStreamError(emitter, ex, principal, request, session, message, requestNo, traceId, question, answerBuffer.toString(), nlpResult, graphResult, nlpDurationMs, graphDurationMs, promptDurationMs, aiDurationMs, startTime, "MODEL_ERROR");
+        } finally {
+            if (message != null) {
+                STREAM_CANCEL_FLAGS.remove(message.getId());
+            }
+        }
     }
 
     @Override
@@ -476,6 +616,11 @@ public class ClientQaServiceImpl implements ClientQaService {
         return session;
     }
 
+    private QaSession prepareSession(UserPrincipal principal, Long sessionId, String question) {
+        QaSession session = sessionId == null ? null : requireSession(sessionId, principal.getId());
+        return session == null ? createSession(principal.getId(), buildSessionTitle(question)) : session;
+    }
+
     private QaSession createSession(Long userId, String title) {
         QaSession session = new QaSession();
         session.setSessionNo(QaBusinessIdGenerator.nextSessionNo());
@@ -495,13 +640,24 @@ public class ClientQaServiceImpl implements ClientQaService {
         message.setRole("ASSISTANT");
         message.setQuestionText(question);
         message.setAnswerText(null);
+        message.setPartialAnswer("");
         message.setAnswerSummary(null);
         message.setMessageStatus("PROCESSING");
+        message.setStreamSequence(0);
         message.setSequenceNo(nextSequenceNo(sessionId));
+        message.setLastStreamAt(LocalDateTime.now());
+        message.setInterruptedReason(null);
         message.setIsDeleted(0);
         message.setCreatedAt(LocalDateTime.now());
         clientQaChatMapper.insertMessage(message);
         return message;
+    }
+
+    private void updateStreamProgress(QaMessage message, String partialAnswer, int sequence) {
+        message.setPartialAnswer(partialAnswer);
+        message.setStreamSequence(sequence);
+        message.setLastStreamAt(LocalDateTime.now());
+        clientQaChatMapper.updateStreamProgress(message);
     }
 
     private int nextSequenceNo(Long sessionId) {
@@ -756,6 +912,62 @@ public class ClientQaServiceImpl implements ClientQaService {
         return new AiCallResult(answer.trim(), response.statusCode());
     }
 
+    private void callBailianStream(String prompt, Consumer<String> deltaConsumer) throws Exception {
+        if (!StringUtils.hasText(bailianProperties.getApiKey())) {
+            throw new BusinessException(ErrorCode.BUSINESS_VALIDATION_FAILED.getCode(), "未配置阿里百炼API Key，请先设置 DASHSCOPE_API_KEY");
+        }
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(bailianProperties.getConnectTimeoutMs()))
+                .build();
+        String payload = JSON_MAPPER.writeValueAsString(Map.of(
+                "model", bailianProperties.getModel(),
+                "stream", true,
+                "messages", List.of(
+                        Map.of("role", "system", "content", bailianProperties.getSystemPrompt()),
+                        Map.of("role", "user", "content", prompt)
+                )
+        ));
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(trimTrailingSlash(bailianProperties.getBaseUrl()) + "/chat/completions"))
+                .timeout(Duration.ofMillis(bailianProperties.getReadTimeoutMs()))
+                .header("Authorization", "Bearer " + bailianProperties.getApiKey())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<java.util.stream.Stream<String>> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofLines());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR.getCode(), "阿里百炼流式调用失败，HTTP状态码：" + response.statusCode());
+        }
+        response.body().forEach(line -> consumeBailianStreamLine(line, deltaConsumer));
+    }
+
+    private void consumeBailianStreamLine(String line, Consumer<String> deltaConsumer) {
+        if (!StringUtils.hasText(line) || !line.startsWith("data:")) {
+            return;
+        }
+        String payload = line.substring("data:".length()).trim();
+        if ("[DONE]".equals(payload)) {
+            return;
+        }
+        JsonNode root;
+        try {
+            root = JSON_MAPPER.readTree(payload);
+        } catch (Exception ex) {
+            return;
+        }
+        JsonNode choices = root.path("choices");
+        if (!choices.isArray() || choices.isEmpty()) {
+            return;
+        }
+        String delta = choices.get(0).path("delta").path("content").asText("");
+        if (!StringUtils.hasText(delta)) {
+            delta = choices.get(0).path("message").path("content").asText("");
+        }
+        if (StringUtils.hasText(delta)) {
+            deltaConsumer.accept(delta);
+        }
+    }
+
     private MonitorAiCallRecord buildAiRecord(String requestNo, int durationMs, Integer statusCode, String answer, String errorMessage) {
         MonitorAiCallRecord record = new MonitorAiCallRecord();
         record.setRequestNo(requestNo);
@@ -783,8 +995,11 @@ public class ClientQaServiceImpl implements ClientQaService {
                                         Map<String, Object> graphResult) {
         message.setRequestNo(requestNo);
         message.setAnswerText(answer);
+        message.setPartialAnswer(answer);
         message.setAnswerSummary(answerSummary);
         message.setMessageStatus("SUCCESS");
+        message.setLastStreamAt(finishedAt);
+        message.setInterruptedReason(null);
         message.setFinishedAt(finishedAt);
         clientQaChatMapper.updateMessageResult(message);
 
@@ -811,8 +1026,11 @@ public class ClientQaServiceImpl implements ClientQaService {
         LocalDateTime finishedAt = LocalDateTime.now();
         // 失败响应写回同一条消息，前端可在原消息位置展示失败态而不是丢失会话记录。
         message.setAnswerText("当前回答生成失败，请稍后重试。");
+        message.setPartialAnswer(defaultString(message.getPartialAnswer()));
         message.setAnswerSummary("回答生成失败");
         message.setMessageStatus("FAILED");
+        message.setLastStreamAt(finishedAt);
+        message.setInterruptedReason(ex.getMessage());
         message.setFinishedAt(finishedAt);
         clientQaChatMapper.updateMessageResult(message);
 
@@ -845,6 +1063,201 @@ public class ClientQaServiceImpl implements ClientQaService {
         exceptionLog.setHandleStatus("UNHANDLED");
         exceptionLog.setOccurredAt(finishedAt);
         clientQaChatMapper.insertExceptionLog(exceptionLog);
+    }
+
+    private ClientChatResponse buildSuccessStreamResult(UserPrincipal principal,
+                                                        ClientChatRequest request,
+                                                        QaSession session,
+                                                        QaMessage message,
+                                                        String requestNo,
+                                                        String question,
+                                                        String answer,
+                                                        Map<String, Object> nlpResult,
+                                                        Map<String, Object> graphResult,
+                                                        int nlpDurationMs,
+                                                        int graphDurationMs,
+                                                        int promptDurationMs,
+                                                        int aiDurationMs,
+                                                        LocalDateTime startTime) {
+        LocalDateTime finishedAt = LocalDateTime.now();
+        int totalDurationMs = millisBetween(startTime, finishedAt);
+        String answerSummary = summarizeAnswer(answer);
+        updateSuccessArtifacts(principal, session, question, message, requestNo, answer, answerSummary, finishedAt, totalDurationMs, graphResult);
+        clientQaChatMapper.touchSession(session.getId(), principal.getId(), buildSessionTitle(question), finishedAt);
+        return ClientChatResponse.builder()
+                .sessionId(session.getId())
+                .sessionNo(session.getSessionNo())
+                .messageId(message.getId())
+                .messageNo(message.getMessageNo())
+                .requestNo(requestNo)
+                .question(question)
+                .answer(answer)
+                .answerSummary(answerSummary)
+                .followUps(buildFollowUps(question, graphResult))
+                .status("SUCCESS")
+                .timings(ClientChatTimingsResponse.builder()
+                        .totalDurationMs(totalDurationMs)
+                        .nlpDurationMs(nlpDurationMs)
+                        .graphDurationMs(graphDurationMs)
+                        .promptDurationMs(promptDurationMs)
+                        .aiDurationMs(aiDurationMs)
+                        .build())
+                .evidenceSummary(ClientChatEvidenceSummaryResponse.builder()
+                        .graphHit((Boolean) graphResult.get("graphHit"))
+                        .entityCount(((List<?>) graphResult.get("entities")).size())
+                        .relationCount(((List<?>) graphResult.get("relations")).size())
+                        .confidence((Double) nlpResult.get("confidence"))
+                        .build())
+                .build();
+    }
+
+    private void handleStreamError(SseEmitter emitter,
+                                   Exception ex,
+                                   UserPrincipal principal,
+                                   ClientChatRequest request,
+                                   QaSession session,
+                                   QaMessage message,
+                                   String requestNo,
+                                   String traceId,
+                                   String question,
+                                   String partialAnswer,
+                                   Map<String, Object> nlpResult,
+                                   Map<String, Object> graphResult,
+                                   int nlpDurationMs,
+                                   int graphDurationMs,
+                                   int promptDurationMs,
+                                   int aiDurationMs,
+                                   LocalDateTime startTime,
+                                   String interruptedReason) {
+        if (session == null || message == null) {
+            emitter.completeWithError(ex);
+            return;
+        }
+        String status = StringUtils.hasText(partialAnswer) ? "PARTIAL_SUCCESS" : "FAILED";
+        if ("USER_CANCEL".equals(interruptedReason) && !StringUtils.hasText(partialAnswer)) {
+            status = "INTERRUPTED";
+        }
+        finalizeInterruptedMessage(message, partialAnswer, status, interruptedReason);
+        LocalDateTime finishedAt = LocalDateTime.now();
+        int totalDurationMs = millisBetween(startTime, finishedAt);
+        MonitorRequestRecord requestRecord = new MonitorRequestRecord();
+        requestRecord.setRequestNo(requestNo);
+        requestRecord.setRequestStatus(toRequestStatus(status));
+        requestRecord.setFinalAnswer(StringUtils.hasText(partialAnswer) ? partialAnswer : "当前回答生成失败，请稍后重试。");
+        requestRecord.setAnswerSummary(StringUtils.hasText(partialAnswer) ? summarizeAnswer(partialAnswer) : "回答生成失败");
+        requestRecord.setTotalDurationMs(totalDurationMs);
+        requestRecord.setGraphHit(Boolean.TRUE.equals(graphResult.get("graphHit")) ? 1 : 0);
+        requestRecord.setAiCallStatus("FAILED");
+        requestRecord.setExceptionFlag(1);
+        requestRecord.setFinishedAt(finishedAt);
+        clientQaChatMapper.updateRequestResult(requestRecord);
+        clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, aiDurationMs, null, null, ex.getMessage()));
+        writeStreamException(ex, principal, request, requestNo, traceId, interruptedReason);
+        ClientChatResponse result = ClientChatResponse.builder()
+                .sessionId(session.getId())
+                .sessionNo(session.getSessionNo())
+                .messageId(message.getId())
+                .messageNo(message.getMessageNo())
+                .requestNo(requestNo)
+                .question(question)
+                .answer(StringUtils.hasText(partialAnswer) ? partialAnswer : "当前回答生成失败，请稍后重试。")
+                .answerSummary(StringUtils.hasText(partialAnswer) ? summarizeAnswer(partialAnswer) : "回答生成失败")
+                .followUps(List.of())
+                .status(status)
+                .timings(ClientChatTimingsResponse.builder()
+                        .totalDurationMs(totalDurationMs)
+                        .nlpDurationMs(nlpDurationMs)
+                        .graphDurationMs(graphDurationMs)
+                        .promptDurationMs(promptDurationMs)
+                        .aiDurationMs(aiDurationMs)
+                        .build())
+                .evidenceSummary(ClientChatEvidenceSummaryResponse.builder()
+                        .graphHit((Boolean) graphResult.get("graphHit"))
+                        .entityCount(((List<?>) graphResult.get("entities")).size())
+                        .relationCount(((List<?>) graphResult.get("relations")).size())
+                        .confidence((Double) nlpResult.get("confidence"))
+                        .build())
+                .build();
+        try {
+            sendSse(emitter, "error", buildStreamEvent(requestNo, session, message, message.getStreamSequence(), "", true, ex.getMessage(), result));
+            emitter.complete();
+        } catch (Exception ignored) {
+            // 客户端断开时状态已经落库，SSE 错误事件发送失败不再影响主链路兜底。
+        }
+    }
+
+    private void finalizeInterruptedMessage(QaMessage message, String partialAnswer, String status, String reason) {
+        LocalDateTime finishedAt = LocalDateTime.now();
+        message.setAnswerText(partialAnswer);
+        message.setPartialAnswer(partialAnswer);
+        message.setAnswerSummary(StringUtils.hasText(partialAnswer) ? summarizeAnswer(partialAnswer) : "回答生成中断");
+        message.setMessageStatus(status);
+        message.setLastStreamAt(finishedAt);
+        message.setInterruptedReason(reason);
+        message.setFinishedAt(finishedAt);
+        clientQaChatMapper.updateMessageResult(message);
+    }
+
+    private void writeStreamException(Exception ex, UserPrincipal principal, ClientChatRequest request, String requestNo, String traceId, String reason) {
+        ExceptionLogRecord exceptionLog = new ExceptionLogRecord();
+        exceptionLog.setExceptionNo(QaBusinessIdGenerator.nextExceptionNo());
+        exceptionLog.setRequestNo(requestNo);
+        exceptionLog.setTraceId(traceId);
+        exceptionLog.setExceptionModule("CLIENT_QA_STREAM");
+        exceptionLog.setExceptionLevel("ERROR");
+        exceptionLog.setExceptionType(ex.getClass().getSimpleName());
+        exceptionLog.setExceptionMessage(reason + ": " + ex.getMessage());
+        exceptionLog.setStackTrace(stackTrace(ex));
+        exceptionLog.setRequestUri("/api/client/qa/chat/stream");
+        exceptionLog.setRequestMethod("POST");
+        exceptionLog.setRequestParamSummary(GraphJsonUtils.toJson(buildExceptionRequestParams(request)));
+        exceptionLog.setContextInfo(GraphJsonUtils.toJson(buildExceptionContext(principal)));
+        exceptionLog.setHandleStatus("UNHANDLED");
+        exceptionLog.setOccurredAt(LocalDateTime.now());
+        clientQaChatMapper.insertExceptionLog(exceptionLog);
+    }
+
+    private ClientStreamEventResponse buildStreamEvent(String requestNo,
+                                                       QaSession session,
+                                                       QaMessage message,
+                                                       Integer sequence,
+                                                       String delta,
+                                                       boolean done,
+                                                       String errorMessage,
+                                                       ClientChatResponse result) {
+        return ClientStreamEventResponse.builder()
+                .requestNo(requestNo)
+                .sessionId(session.getId())
+                .sessionNo(session.getSessionNo())
+                .messageId(message.getId())
+                .messageNo(message.getMessageNo())
+                .sequence(sequence == null ? 0 : sequence)
+                .delta(defaultString(delta))
+                .done(done)
+                .errorMessage(errorMessage)
+                .result(result)
+                .build();
+    }
+
+    private void sendSse(SseEmitter emitter, String eventName, ClientStreamEventResponse event) {
+        try {
+            emitter.send(SseEmitter.event().name(eventName).data(event));
+        } catch (Exception ex) {
+            throw new StreamCancelledException("SSE_SEND_FAILED");
+        }
+    }
+
+    private boolean isStreamCancelled(Long messageId) {
+        AtomicBoolean flag = STREAM_CANCEL_FLAGS.get(messageId);
+        return flag != null && flag.get();
+    }
+
+    private String defaultString(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String toRequestStatus(String messageStatus) {
+        return "INTERRUPTED".equals(messageStatus) ? "FAILED" : messageStatus;
     }
 
     private Map<String, Object> buildExceptionRequestParams(ClientChatRequest request) {
@@ -998,5 +1411,11 @@ public class ClientQaServiceImpl implements ClientQaService {
     }
 
     private record AiCallResult(String answer, Integer statusCode) {
+    }
+
+    private static class StreamCancelledException extends RuntimeException {
+        private StreamCancelledException(String message) {
+            super(message);
+        }
     }
 }

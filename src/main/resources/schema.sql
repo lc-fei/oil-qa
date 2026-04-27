@@ -248,9 +248,13 @@ CREATE TABLE qa_message (
     role VARCHAR(20) NOT NULL DEFAULT 'ASSISTANT',
     question_text TEXT NOT NULL,
     answer_text LONGTEXT DEFAULT NULL,
+    partial_answer LONGTEXT DEFAULT NULL,
     answer_summary TEXT DEFAULT NULL,
     message_status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+    stream_sequence INT NOT NULL DEFAULT 0,
     sequence_no INT NOT NULL DEFAULT 1,
+    last_stream_at DATETIME DEFAULT NULL,
+    interrupted_reason VARCHAR(255) DEFAULT NULL,
     is_deleted TINYINT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at DATETIME DEFAULT NULL,
@@ -258,6 +262,7 @@ CREATE TABLE qa_message (
     KEY idx_qa_message_session_id (session_id),
     KEY idx_qa_message_request_no (request_no),
     KEY idx_qa_message_status (message_status),
+    KEY idx_qa_message_last_stream_at (last_stream_at),
     KEY idx_qa_message_created_at (created_at)
 );
 

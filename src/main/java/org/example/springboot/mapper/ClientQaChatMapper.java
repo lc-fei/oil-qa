@@ -22,10 +22,12 @@ public interface ClientQaChatMapper {
     @Insert("""
             INSERT INTO qa_message (
                 message_no, session_id, request_no, role, question_text, answer_text, answer_summary,
-                message_status, sequence_no, is_deleted, created_at, finished_at
+                partial_answer, message_status, stream_sequence, sequence_no, last_stream_at,
+                interrupted_reason, is_deleted, created_at, finished_at
             ) VALUES (
                 #{messageNo}, #{sessionId}, #{requestNo}, #{role}, #{questionText}, #{answerText}, #{answerSummary},
-                #{messageStatus}, #{sequenceNo}, #{isDeleted}, #{createdAt}, #{finishedAt}
+                #{partialAnswer}, #{messageStatus}, #{streamSequence}, #{sequenceNo}, #{lastStreamAt},
+                #{interruptedReason}, #{isDeleted}, #{createdAt}, #{finishedAt}
             )
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -35,12 +37,26 @@ public interface ClientQaChatMapper {
             UPDATE qa_message
             SET request_no = #{requestNo},
                 answer_text = #{answerText},
+                partial_answer = #{partialAnswer},
                 answer_summary = #{answerSummary},
                 message_status = #{messageStatus},
+                stream_sequence = #{streamSequence},
+                last_stream_at = #{lastStreamAt},
+                interrupted_reason = #{interruptedReason},
                 finished_at = #{finishedAt}
             WHERE id = #{id}
             """)
     int updateMessageResult(QaMessage message);
+
+    @Update("""
+            UPDATE qa_message
+            SET partial_answer = #{partialAnswer},
+                stream_sequence = #{streamSequence},
+                last_stream_at = #{lastStreamAt}
+            WHERE id = #{id}
+              AND message_status = 'PROCESSING'
+            """)
+    int updateStreamProgress(QaMessage message);
 
     @Insert("""
             INSERT INTO qa_request (
