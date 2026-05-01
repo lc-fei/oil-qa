@@ -31,7 +31,7 @@ import java.util.Map;
  */
 public class ExceptionLogServiceImpl implements ExceptionLogService {
 
-    // 异常日志模块当前只负责读和处理状态更新，异常写入仍需后续埋点接入。
+    // 异常写入由问答链路和全局异常处理器完成，本服务聚焦查询与处理状态流转。
     private final ExceptionLogMapper exceptionLogMapper;
 
     @Override
