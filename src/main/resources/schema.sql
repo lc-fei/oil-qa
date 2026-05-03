@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS qa_recommend_question;
 DROP TABLE IF EXISTS qa_message_feedback;
 DROP TABLE IF EXISTS qa_message_favorite;
 DROP TABLE IF EXISTS qa_orchestration_trace;
+DROP TABLE IF EXISTS qa_session_memory;
 DROP TABLE IF EXISTS qa_message;
 DROP TABLE IF EXISTS qa_session;
 DROP TABLE IF EXISTS sys_exception_log;
@@ -265,6 +266,26 @@ CREATE TABLE qa_message (
     KEY idx_qa_message_created_at (created_at)
 );
 
+CREATE TABLE qa_session_memory (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    session_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    summary LONGTEXT DEFAULT NULL,
+    summarized_until_message_id BIGINT DEFAULT NULL,
+    recent_window_size INT NOT NULL DEFAULT 2,
+    pending_overflow_count INT NOT NULL DEFAULT 0,
+    memory_keys_json LONGTEXT DEFAULT NULL,
+    summary_version INT NOT NULL DEFAULT 0,
+    last_memory_at DATETIME DEFAULT NULL,
+    last_error_message VARCHAR(1000) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_session_memory_session_id UNIQUE (session_id),
+    KEY idx_qa_session_memory_user_id (user_id),
+    KEY idx_qa_session_memory_cursor (summarized_until_message_id),
+    KEY idx_qa_session_memory_updated_at (updated_at)
+);
+
 CREATE TABLE qa_orchestration_trace (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     request_no VARCHAR(64) NOT NULL,
@@ -281,6 +302,7 @@ CREATE TABLE qa_orchestration_trace (
     ranking_json LONGTEXT DEFAULT NULL,
     generation_json LONGTEXT DEFAULT NULL,
     quality_json LONGTEXT DEFAULT NULL,
+    memory_json LONGTEXT DEFAULT NULL,
     timings_json LONGTEXT DEFAULT NULL,
     error_message VARCHAR(1000) DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

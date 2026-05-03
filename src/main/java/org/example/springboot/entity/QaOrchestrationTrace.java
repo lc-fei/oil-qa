@@ -25,6 +25,7 @@ public class QaOrchestrationTrace {
     private String rankingJson;
     private String generationJson;
     private String qualityJson;
+    private String memoryJson;
     private String timingsJson;
     private String errorMessage;
     private LocalDateTime createdAt;

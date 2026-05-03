@@ -1,6 +1,7 @@
 package org.example.springboot.service.qa;
 
 import lombok.RequiredArgsConstructor;
+import org.example.springboot.dto.QaConversationMemoryResponse;
 import org.example.springboot.dto.QaToolCallResponse;
 import org.example.springboot.dto.QaWorkflowResponse;
 import org.example.springboot.dto.QaWorkflowStageResponse;
@@ -45,6 +46,7 @@ public class QaOrchestrationArchiveService {
                 .archiveId(context.getArchiveId())
                 .stages(context.getStageTraces().stream().map(this::toStageResponse).toList())
                 .toolCalls(context.getToolCalls().stream().map(this::toToolCallResponse).toList())
+                .memory(toMemoryResponse(context.getConversationMemory()))
                 .build();
     }
 
@@ -88,9 +90,32 @@ public class QaOrchestrationArchiveService {
         trace.setRankingJson(toJson(context.getRanking()));
         trace.setGenerationJson(toJson(context.getGeneration()));
         trace.setQualityJson(toJson(context.getQuality()));
+        trace.setMemoryJson(toJson(context.getConversationMemory()));
         trace.setTimingsJson(toJson(context.getTimings()));
         trace.setErrorMessage(trim(context.getErrorMessage(), 1000));
         return trace;
+    }
+
+    private QaConversationMemoryResponse toMemoryResponse(ConversationMemoryContext memory) {
+        if (memory == null) {
+            return null;
+        }
+        ConversationMemoryKeys keys = memory.getMemoryKeys();
+        return QaConversationMemoryResponse.builder()
+                .enabled(memory.getEnabled())
+                .summary(memory.getSummary())
+                .currentTopic(keys == null ? "" : keys.getCurrentTopic())
+                .keyEntities(keys == null ? List.of() : keys.getKeyEntities())
+                .userPreferences(keys == null ? List.of() : keys.getUserPreferences())
+                .constraints(keys == null ? List.of() : keys.getConstraints())
+                .openQuestions(keys == null ? List.of() : keys.getOpenQuestions())
+                .lastIntent(keys == null ? "" : keys.getLastIntent())
+                .usedMessageIds(memory.getUsedMessageIds())
+                .summarizedUntilMessageId(memory.getSummarizedUntilMessageId())
+                .recentWindowSize(memory.getRecentWindowSize())
+                .pendingOverflowTurnCount(memory.getPendingOverflowTurnCount())
+                .truncated(memory.getTruncated())
+                .build();
     }
 
     private String toJson(Object value) {

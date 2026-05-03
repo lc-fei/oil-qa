@@ -18,12 +18,12 @@ public interface QaOrchestrationTraceMapper {
             INSERT INTO qa_orchestration_trace (
                 request_no, session_id, message_id, user_id, pipeline_status, current_stage,
                 stage_trace_json, tool_calls_json, question_understanding_json, planning_json,
-                evidence_json, ranking_json, generation_json, quality_json, timings_json,
+                evidence_json, ranking_json, generation_json, quality_json, memory_json, timings_json,
                 error_message, created_at, updated_at
             ) VALUES (
                 #{requestNo}, #{sessionId}, #{messageId}, #{userId}, #{pipelineStatus}, #{currentStage},
                 #{stageTraceJson}, #{toolCallsJson}, #{questionUnderstandingJson}, #{planningJson},
-                #{evidenceJson}, #{rankingJson}, #{generationJson}, #{qualityJson}, #{timingsJson},
+                #{evidenceJson}, #{rankingJson}, #{generationJson}, #{qualityJson}, #{memoryJson}, #{timingsJson},
                 #{errorMessage}, #{createdAt}, #{updatedAt}
             )
             """)
@@ -42,6 +42,7 @@ public interface QaOrchestrationTraceMapper {
                 ranking_json = #{rankingJson},
                 generation_json = #{generationJson},
                 quality_json = #{qualityJson},
+                memory_json = #{memoryJson},
                 timings_json = #{timingsJson},
                 error_message = #{errorMessage},
                 updated_at = #{updatedAt}
@@ -52,7 +53,7 @@ public interface QaOrchestrationTraceMapper {
     @Select("""
             SELECT id, request_no, session_id, message_id, user_id, pipeline_status, current_stage,
                    stage_trace_json, tool_calls_json, question_understanding_json, planning_json,
-                   evidence_json, ranking_json, generation_json, quality_json, timings_json,
+                   evidence_json, ranking_json, generation_json, quality_json, memory_json, timings_json,
                    error_message, created_at, updated_at
             FROM qa_orchestration_trace
             WHERE request_no = #{requestNo}
@@ -62,7 +63,7 @@ public interface QaOrchestrationTraceMapper {
     @Select("""
             SELECT id, request_no, session_id, message_id, user_id, pipeline_status, current_stage,
                    stage_trace_json, tool_calls_json, question_understanding_json, planning_json,
-                   evidence_json, ranking_json, generation_json, quality_json, timings_json,
+                   evidence_json, ranking_json, generation_json, quality_json, memory_json, timings_json,
                    error_message, created_at, updated_at
             FROM qa_orchestration_trace
             WHERE message_id = #{messageId}

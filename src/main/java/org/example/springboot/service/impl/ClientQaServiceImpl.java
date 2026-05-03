@@ -37,6 +37,8 @@ import org.example.springboot.security.AuthContext;
 import org.example.springboot.security.UserPrincipal;
 import org.example.springboot.service.ClientQaService;
 import org.example.springboot.service.qa.AnswerQualityService;
+import org.example.springboot.service.qa.ConversationMemoryContext;
+import org.example.springboot.service.qa.ConversationMemoryService;
 import org.example.springboot.service.qa.QaEvidenceRankerService;
 import org.example.springboot.service.qa.QaGenerationResult;
 import org.example.springboot.service.qa.QaGraphRetrievalService;
@@ -112,6 +114,7 @@ public class ClientQaServiceImpl implements ClientQaService {
     private final AnswerQualityService answerQualityService;
     private final QaOrchestrationArchiveService qaOrchestrationArchiveService;
     private final QaOrchestrationSupport qaOrchestrationSupport;
+    private final ConversationMemoryService conversationMemoryService;
 
     @Override
     public ClientChatResponse chat(ClientChatRequest request) {
@@ -145,6 +148,7 @@ public class ClientQaServiceImpl implements ClientQaService {
         MonitorRequestRecord requestRecord = createRequestRecord(principal, requestNo, traceId, question, startTime);
         clientQaChatMapper.insertRequest(requestRecord);
         QaOrchestrationContext orchestrationContext = createOrchestrationContext(principal, request, session, message, requestNo, traceId, question, startTime);
+        orchestrationContext.setConversationMemory(conversationMemoryService.buildMemoryContext(session.getId(), principal.getId(), contextMode));
         qaOrchestrationArchiveService.createTrace(orchestrationContext);
 
         String answer;
@@ -165,7 +169,10 @@ public class ClientQaServiceImpl implements ClientQaService {
              * 结果同时写入编排归档和 qa_nlp_record，便于前端展示流程、管理端追踪耗时。
              */
             QaStageTrace understandingStage = qaOrchestrationSupport.startStage(orchestrationContext, QaPipelineStage.QUESTION_UNDERSTANDING);
-            QuestionUnderstandingResult understanding = questionUnderstandingService.understand(question, "");
+            QuestionUnderstandingResult understanding = questionUnderstandingService.understand(
+                    question,
+                    orchestrationContext.getConversationMemory().getUnderstandingContext()
+            );
             orchestrationContext.setUnderstanding(understanding);
             qaOrchestrationSupport.completeStage(orchestrationContext, understandingStage, understanding.getReasoningSummary());
             qaOrchestrationArchiveService.updateTrace(orchestrationContext);
@@ -290,6 +297,9 @@ public class ClientQaServiceImpl implements ClientQaService {
         orchestrationContext.setFinishedAt(finishedAt);
         qaOrchestrationSupport.completeStage(orchestrationContext, archiveStage, "消息、监控与编排轨迹已归档");
         qaOrchestrationArchiveService.updateTrace(orchestrationContext);
+        if ("ON".equalsIgnoreCase(request.getContextMode())) {
+            conversationMemoryService.updateAfterSuccessAsync(session, message, orchestrationContext.getUnderstanding(), graphEntityNames(graphResult));
+        }
 
         // chat 响应只返回轻量依据摘要；完整知识依据由 evidence 接口按 messageId 懒加载。
         return ClientChatResponse.builder()
@@ -418,6 +428,7 @@ public class ClientQaServiceImpl implements ClientQaService {
             session = prepareSession(principal, request.getSessionId(), question);
             message = createProcessingMessage(session.getId(), requestNo, question);
             orchestrationContext = createOrchestrationContext(principal, request, session, message, requestNo, traceId, question, startTime);
+            orchestrationContext.setConversationMemory(conversationMemoryService.buildMemoryContext(session.getId(), principal.getId(), request.getContextMode()));
             STREAM_CANCEL_FLAGS.put(message.getId(), new AtomicBoolean(false));
             clientQaChatMapper.insertRequest(createRequestRecord(principal, requestNo, traceId, question, startTime));
             qaOrchestrationArchiveService.createTrace(orchestrationContext);
@@ -426,7 +437,10 @@ public class ClientQaServiceImpl implements ClientQaService {
             // 流式阶段 1：开始和完成时各推送一次 stage，前端可展示“正在理解问题 -> 已完成”。
             QaStageTrace understandingStage = qaOrchestrationSupport.startStage(orchestrationContext, QaPipelineStage.QUESTION_UNDERSTANDING);
             sendStageSse(emitter, requestNo, session, message, understandingStage, orchestrationContext);
-            QuestionUnderstandingResult understanding = questionUnderstandingService.understand(question, "");
+            QuestionUnderstandingResult understanding = questionUnderstandingService.understand(
+                    question,
+                    orchestrationContext.getConversationMemory().getUnderstandingContext()
+            );
             orchestrationContext.setUnderstanding(understanding);
             qaOrchestrationSupport.completeStage(orchestrationContext, understandingStage, understanding.getReasoningSummary());
             qaOrchestrationArchiveService.updateTrace(orchestrationContext);
@@ -434,8 +448,6 @@ public class ClientQaServiceImpl implements ClientQaService {
             nlpDurationMs = understandingStage.getDurationMs();
             nlpResult = toNlpResult(understanding);
             clientQaChatMapper.insertNlp(buildNlpRecord(requestNo, nlpResult, nlpDurationMs));
-            System.out.println(nlpResult + "YBF");
-
 
             // 流式阶段 2：任务规划会先进入 PROCESSING，再输出是否调用图谱、多跳或降级回答的结果。
             QaStageTrace planningStage = qaOrchestrationSupport.startStage(orchestrationContext, QaPipelineStage.PLANNING);
@@ -552,6 +564,9 @@ public class ClientQaServiceImpl implements ClientQaService {
                     .workflow(qaOrchestrationArchiveService.buildWorkflow(orchestrationContext))
                     .build();
             sendSse(emitter, "done", buildStreamEvent(requestNo, session, message, sequence[0], "", true, null, result));
+            if ("ON".equalsIgnoreCase(request.getContextMode())) {
+                conversationMemoryService.updateAfterSuccessAsync(session, message, orchestrationContext.getUnderstanding(), graphEntityNames(graphResult));
+            }
             emitter.complete();
         } catch (StreamCancelledException ex) {
             // 用户取消或 SSE 发送失败都走统一中断归并，保证消息和监控表不会停留在 PROCESSING。
@@ -1148,13 +1163,19 @@ public class ClientQaServiceImpl implements ClientQaService {
         }
         appendPlannerAndRankedEvidence(builder, orchestrationContext);
         if ("ON".equalsIgnoreCase(request.getContextMode())) {
-            // 上下文只取最近几轮，控制 prompt 长度并降低历史噪声。
-            builder.append("\n历史上下文：\n");
-            appendConversationHistory(builder, sessionId);
+            // 会话记忆使用“滚动摘要 + 待摘要溢出轮次 + 最近 2 轮原文”，避免长会话全量拼接。
+            appendConversationMemory(builder, orchestrationContext == null ? null : orchestrationContext.getConversationMemory());
         }
         builder.append("\n用户问题：").append(question).append("\n");
         builder.append("请使用中文回答，并在依据不足时明确说明不确定性。");
         return builder.toString();
+    }
+
+    private void appendConversationMemory(StringBuilder builder, ConversationMemoryContext memory) {
+        if (memory == null || !Boolean.TRUE.equals(memory.getEnabled()) || !StringUtils.hasText(memory.getMemoryText())) {
+            return;
+        }
+        builder.append("\n会话记忆：\n").append(memory.getMemoryText()).append("\n");
     }
 
     private void appendPlannerAndRankedEvidence(StringBuilder builder, QaOrchestrationContext orchestrationContext) {
@@ -1812,6 +1833,17 @@ public class ClientQaServiceImpl implements ClientQaService {
         List<GraphEntityRecord> entities = (List<GraphEntityRecord>) graphResult.get("entities");
         List<GraphRelationRecord> relations = (List<GraphRelationRecord>) graphResult.get("relations");
         return "命中实体" + entities.size() + "个，关系" + relations.size() + "条";
+    }
+
+    private List<String> graphEntityNames(Map<String, Object> graphResult) {
+        List<GraphEntityRecord> entities = (List<GraphEntityRecord>) graphResult.get("entities");
+        if (entities == null || entities.isEmpty()) {
+            return List.of();
+        }
+        return entities.stream()
+                .map(GraphEntityRecord::getName)
+                .filter(StringUtils::hasText)
+                .toList();
     }
 
     private List<String> buildPropertySummary(List<GraphEntityRecord> entities) {

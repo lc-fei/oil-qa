@@ -159,7 +159,7 @@ The system SHALL archive final and intermediate QA results to a dedicated orches
 #### Scenario: Successful archive
 
 - **WHEN** a QA request completes successfully
-- **THEN** the system MUST persist the final answer, answer summary, evidence summary, workflow stages, tool calls, timings, monitor records, archive record, and evidence source data linked by requestNo.
+- **THEN** the system MUST persist the final answer, evidence summary, workflow stages, tool calls, timings, monitor records, archive record, and evidence source data linked by requestNo.
 
 #### Scenario: Failed archive
 

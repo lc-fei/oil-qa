@@ -133,6 +133,91 @@ public interface ClientQaMessageMapper {
                    m.finished_at
             FROM qa_message m
             INNER JOIN qa_session s ON s.id = m.session_id
+            WHERE m.session_id = #{sessionId}
+              AND s.user_id = #{userId}
+              AND s.is_deleted = 0
+              AND m.is_deleted = 0
+              AND m.message_status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+              AND m.answer_text IS NOT NULL
+              AND m.answer_text <> ''
+            ORDER BY m.sequence_no DESC, m.id DESC
+            LIMIT #{limit}
+            """)
+    @org.apache.ibatis.annotations.ResultMap("qaMessageResultMap")
+    List<QaMessage> findRecentEffectiveMessages(@Param("sessionId") Long sessionId,
+                                                @Param("userId") Long userId,
+                                                @Param("limit") Integer limit);
+
+    @Select("""
+            SELECT m.id,
+                   m.message_no,
+                   m.session_id,
+                   m.request_no,
+                   m.role,
+                   m.question_text,
+                   m.answer_text,
+                   m.partial_answer,
+                   m.message_status,
+                   m.stream_sequence,
+                   m.sequence_no,
+                   m.last_stream_at,
+                   m.interrupted_reason,
+                   m.is_deleted,
+                   m.created_at,
+                   m.finished_at
+            FROM qa_message m
+            INNER JOIN qa_session s ON s.id = m.session_id
+            WHERE m.session_id = #{sessionId}
+              AND s.user_id = #{userId}
+              AND s.is_deleted = 0
+              AND m.is_deleted = 0
+              AND m.message_status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+              AND m.answer_text IS NOT NULL
+              AND m.answer_text <> ''
+              AND (#{summarizedUntilMessageId} IS NULL OR m.id > #{summarizedUntilMessageId})
+              AND m.id NOT IN (
+                  SELECT recent.id
+                  FROM (
+                      SELECT m2.id
+                      FROM qa_message m2
+                      WHERE m2.session_id = #{sessionId}
+                        AND m2.is_deleted = 0
+                        AND m2.message_status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+                        AND m2.answer_text IS NOT NULL
+                        AND m2.answer_text <> ''
+                      ORDER BY m2.sequence_no DESC, m2.id DESC
+                      LIMIT #{recentWindowSize}
+                  ) recent
+              )
+            ORDER BY m.sequence_no ASC, m.id ASC
+            LIMIT #{limit}
+            """)
+    @org.apache.ibatis.annotations.ResultMap("qaMessageResultMap")
+    List<QaMessage> findPendingOverflowMessages(@Param("sessionId") Long sessionId,
+                                                @Param("userId") Long userId,
+                                                @Param("summarizedUntilMessageId") Long summarizedUntilMessageId,
+                                                @Param("recentWindowSize") Integer recentWindowSize,
+                                                @Param("limit") Integer limit);
+
+    @Select("""
+            SELECT m.id,
+                   m.message_no,
+                   m.session_id,
+                   m.request_no,
+                   m.role,
+                   m.question_text,
+                   m.answer_text,
+                   m.partial_answer,
+                   m.message_status,
+                   m.stream_sequence,
+                   m.sequence_no,
+                   m.last_stream_at,
+                   m.interrupted_reason,
+                   m.is_deleted,
+                   m.created_at,
+                   m.finished_at
+            FROM qa_message m
+            INNER JOIN qa_session s ON s.id = m.session_id
             WHERE m.id = #{messageId}
               AND s.user_id = #{userId}
               AND s.is_deleted = 0

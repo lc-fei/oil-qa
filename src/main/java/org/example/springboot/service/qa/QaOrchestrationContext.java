@@ -44,5 +44,6 @@ public class QaOrchestrationContext {
     private QaRankingResult ranking;
     private QaGenerationResult generation;
     private QaQualityResult quality;
+    private ConversationMemoryContext conversationMemory;
     private String errorMessage;
 }

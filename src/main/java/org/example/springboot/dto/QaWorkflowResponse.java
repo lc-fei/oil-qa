@@ -18,4 +18,5 @@ public class QaWorkflowResponse {
     private Long archiveId;
     private List<QaWorkflowStageResponse> stages;
     private List<QaToolCallResponse> toolCalls;
+    private QaConversationMemoryResponse memory;
 }

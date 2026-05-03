@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS qa_orchestration_trace (
     ranking_json LONGTEXT DEFAULT NULL,
     generation_json LONGTEXT DEFAULT NULL,
     quality_json LONGTEXT DEFAULT NULL,
+    memory_json LONGTEXT DEFAULT NULL,
     timings_json LONGTEXT DEFAULT NULL,
     error_message VARCHAR(1000) DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -70,6 +71,26 @@ CREATE TABLE IF NOT EXISTS qa_orchestration_trace (
     KEY idx_qa_orchestration_status (pipeline_status),
     KEY idx_qa_orchestration_stage (current_stage),
     KEY idx_qa_orchestration_created_at (created_at)
+);
+
+CREATE TABLE IF NOT EXISTS qa_session_memory (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    session_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    summary LONGTEXT DEFAULT NULL,
+    summarized_until_message_id BIGINT DEFAULT NULL,
+    recent_window_size INT NOT NULL DEFAULT 2,
+    pending_overflow_count INT NOT NULL DEFAULT 0,
+    memory_keys_json LONGTEXT DEFAULT NULL,
+    summary_version INT NOT NULL DEFAULT 0,
+    last_memory_at DATETIME DEFAULT NULL,
+    last_error_message VARCHAR(1000) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_session_memory_session_id UNIQUE (session_id),
+    KEY idx_qa_session_memory_user_id (user_id),
+    KEY idx_qa_session_memory_cursor (summarized_until_message_id),
+    KEY idx_qa_session_memory_updated_at (updated_at)
 );
 
 DELIMITER //
@@ -133,6 +154,18 @@ BEGIN
     END IF;
 END//
 
+DROP PROCEDURE IF EXISTS add_qa_orchestration_memory_column//
+
+CREATE PROCEDURE add_qa_orchestration_memory_column()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_orchestration_trace' AND COLUMN_NAME = 'memory_json'
+    ) THEN
+        ALTER TABLE qa_orchestration_trace ADD COLUMN memory_json LONGTEXT DEFAULT NULL AFTER quality_json;
+    END IF;
+END//
+
 DELIMITER ;
 
 CALL drop_qa_answer_summary_columns();
@@ -140,6 +173,9 @@ DROP PROCEDURE drop_qa_answer_summary_columns;
 
 CALL add_qa_message_stream_columns();
 DROP PROCEDURE add_qa_message_stream_columns;
+
+CALL add_qa_orchestration_memory_column();
+DROP PROCEDURE add_qa_orchestration_memory_column;
 
 CREATE TABLE IF NOT EXISTS qa_message_favorite (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
