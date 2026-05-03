@@ -21,7 +21,6 @@ public class GraphVisualizationController {
 
     @GetMapping
     public Result<GraphVisualizationResponse> visualize(GraphVisualizationQuery query) {
-        System.out.println("query" + query);
         return Result.success(graphVisualizationService.getVisualization(query));
     }
 }

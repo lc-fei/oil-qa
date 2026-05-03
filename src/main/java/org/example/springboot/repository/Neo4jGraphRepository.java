@@ -411,6 +411,99 @@ public class Neo4jGraphRepository {
         });
     }
 
+    public long countEntitiesForFullVisualization(String typeCode, String relationTypeCode, boolean includeIsolated) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("typeCode", StringUtils.hasText(typeCode) ? typeCode : null);
+        params.put("relationTypeCode", StringUtils.hasText(relationTypeCode) ? relationTypeCode : null);
+        String cypher;
+        if (StringUtils.hasText(relationTypeCode) || !includeIsolated) {
+            cypher = """
+                    MATCH (n:GraphEntity)-[r:GRAPH_RELATION]-()
+                    WHERE ($typeCode IS NULL OR n.typeCode = $typeCode)
+                      AND ($relationTypeCode IS NULL OR r.relationTypeCode = $relationTypeCode)
+                    RETURN count(DISTINCT n) AS total
+                    """;
+        } else {
+            cypher = """
+                    MATCH (n:GraphEntity)
+                    WHERE ($typeCode IS NULL OR n.typeCode = $typeCode)
+                    RETURN count(n) AS total
+                    """;
+        }
+        return executeRead(cypher, params, result -> result.single().get("total").asLong());
+    }
+
+    public long countRelationsForFullVisualization(String typeCode, String relationTypeCode) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("typeCode", StringUtils.hasText(typeCode) ? typeCode : null);
+        params.put("relationTypeCode", StringUtils.hasText(relationTypeCode) ? relationTypeCode : null);
+        String cypher = """
+                MATCH (s:GraphEntity)-[r:GRAPH_RELATION]->(t:GraphEntity)
+                WHERE ($relationTypeCode IS NULL OR r.relationTypeCode = $relationTypeCode)
+                  AND ($typeCode IS NULL OR s.typeCode = $typeCode OR t.typeCode = $typeCode)
+                RETURN count(r) AS total
+                """;
+        return executeRead(cypher, params, result -> result.single().get("total").asLong());
+    }
+
+    public List<GraphEntityRecord> findEntitiesForFullVisualization(String typeCode, boolean includeIsolated, int limit) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("typeCode", StringUtils.hasText(typeCode) ? typeCode : null);
+        params.put("limit", Math.max(1, limit));
+        String cypher;
+        if (includeIsolated) {
+            cypher = """
+                    MATCH (n:GraphEntity)
+                    WHERE ($typeCode IS NULL OR n.typeCode = $typeCode)
+                    OPTIONAL MATCH (n)-[r]-()
+                    WITH n, count(r) AS relationCount
+                    RETURN n, relationCount
+                    ORDER BY relationCount DESC, n.updatedAt DESC, n.id DESC
+                    LIMIT $limit
+                    """;
+        } else {
+            cypher = """
+                    MATCH (n:GraphEntity)-[r]-()
+                    WHERE ($typeCode IS NULL OR n.typeCode = $typeCode)
+                    WITH n, count(r) AS relationCount
+                    RETURN n, relationCount
+                    ORDER BY relationCount DESC, n.updatedAt DESC, n.id DESC
+                    LIMIT $limit
+                    """;
+        }
+        return executeRead(cypher, params, result -> {
+            List<GraphEntityRecord> records = new ArrayList<>();
+            while (result.hasNext()) {
+                Record row = result.next();
+                records.add(toEntityRecord(row.get("n").asNode(), row.get("relationCount").asInt(0)));
+            }
+            return records;
+        });
+    }
+
+    public List<GraphRelationRecord> findRelationsForFullVisualization(String typeCode, String relationTypeCode, int limit) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("typeCode", StringUtils.hasText(typeCode) ? typeCode : null);
+        params.put("relationTypeCode", StringUtils.hasText(relationTypeCode) ? relationTypeCode : null);
+        params.put("limit", Math.max(1, limit));
+        String cypher = """
+                MATCH (s:GraphEntity)-[r:GRAPH_RELATION]->(t:GraphEntity)
+                WHERE ($relationTypeCode IS NULL OR r.relationTypeCode = $relationTypeCode)
+                  AND ($typeCode IS NULL OR s.typeCode = $typeCode OR t.typeCode = $typeCode)
+                RETURN r, s, t
+                ORDER BY r.updatedAt DESC, r.id DESC
+                LIMIT $limit
+                """;
+        return executeRead(cypher, params, result -> {
+            List<GraphRelationRecord> records = new ArrayList<>();
+            while (result.hasNext()) {
+                Record row = result.next();
+                records.add(toRelationRecord(row.get("r").asRelationship(), row.get("s").asNode(), row.get("t").asNode()));
+            }
+            return records;
+        });
+    }
+
     public List<GraphEntityRecord> findEntitiesForExport(String name, String typeCode, Integer status) {
         GraphEntityPageQuery query = new GraphEntityPageQuery();
         query.setName(name);

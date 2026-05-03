@@ -12,7 +12,13 @@ import java.util.List;
  */
 public class GraphVisualizationResponse {
 
+    private String mode;
     private GraphNodeResponse center;
+    private Long totalNodeCount;
+    private Long totalEdgeCount;
+    private Integer returnedNodeCount;
+    private Integer returnedEdgeCount;
+    private Boolean truncated;
     private List<GraphNodeResponse> nodes;
     private List<GraphEdgeResponse> edges;
 }
