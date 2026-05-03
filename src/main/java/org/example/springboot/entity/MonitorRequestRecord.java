@@ -19,7 +19,6 @@ public class MonitorRequestRecord {
     private String requestSource;
     private String requestStatus;
     private String finalAnswer;
-    private String answerSummary;
     private Integer totalDurationMs;
     private Integer graphHit;
     private String aiCallStatus;

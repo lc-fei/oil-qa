@@ -19,5 +19,8 @@ public class ClientStreamEventResponse {
     private String delta;
     private Boolean done;
     private String errorMessage;
+    private QaWorkflowStageResponse stage;
+    private QaToolCallResponse toolCall;
+    private QaWorkflowResponse workflow;
     private ClientChatResponse result;
 }

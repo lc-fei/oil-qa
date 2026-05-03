@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS qa_daily_stat;
 DROP TABLE IF EXISTS qa_recommend_question;
 DROP TABLE IF EXISTS qa_message_feedback;
 DROP TABLE IF EXISTS qa_message_favorite;
+DROP TABLE IF EXISTS qa_orchestration_trace;
 DROP TABLE IF EXISTS qa_message;
 DROP TABLE IF EXISTS qa_session;
 DROP TABLE IF EXISTS sys_exception_log;
@@ -99,7 +100,6 @@ CREATE TABLE qa_request (
     request_source VARCHAR(20) NOT NULL DEFAULT 'CLIENT_WEB',
     request_status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
     final_answer LONGTEXT DEFAULT NULL,
-    answer_summary TEXT DEFAULT NULL,
     total_duration_ms INT DEFAULT NULL,
     graph_hit TINYINT NOT NULL DEFAULT 0,
     ai_call_status VARCHAR(20) DEFAULT NULL,
@@ -249,7 +249,6 @@ CREATE TABLE qa_message (
     question_text TEXT NOT NULL,
     answer_text LONGTEXT DEFAULT NULL,
     partial_answer LONGTEXT DEFAULT NULL,
-    answer_summary TEXT DEFAULT NULL,
     message_status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
     stream_sequence INT NOT NULL DEFAULT 0,
     sequence_no INT NOT NULL DEFAULT 1,
@@ -264,6 +263,35 @@ CREATE TABLE qa_message (
     KEY idx_qa_message_status (message_status),
     KEY idx_qa_message_last_stream_at (last_stream_at),
     KEY idx_qa_message_created_at (created_at)
+);
+
+CREATE TABLE qa_orchestration_trace (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    session_id BIGINT NOT NULL,
+    message_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    pipeline_status VARCHAR(30) NOT NULL DEFAULT 'PROCESSING',
+    current_stage VARCHAR(50) DEFAULT NULL,
+    stage_trace_json LONGTEXT DEFAULT NULL,
+    tool_calls_json LONGTEXT DEFAULT NULL,
+    question_understanding_json LONGTEXT DEFAULT NULL,
+    planning_json LONGTEXT DEFAULT NULL,
+    evidence_json LONGTEXT DEFAULT NULL,
+    ranking_json LONGTEXT DEFAULT NULL,
+    generation_json LONGTEXT DEFAULT NULL,
+    quality_json LONGTEXT DEFAULT NULL,
+    timings_json LONGTEXT DEFAULT NULL,
+    error_message VARCHAR(1000) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_qa_orchestration_request_no UNIQUE (request_no),
+    KEY idx_qa_orchestration_session_id (session_id),
+    KEY idx_qa_orchestration_message_id (message_id),
+    KEY idx_qa_orchestration_user_id (user_id),
+    KEY idx_qa_orchestration_status (pipeline_status),
+    KEY idx_qa_orchestration_stage (current_stage),
+    KEY idx_qa_orchestration_created_at (created_at)
 );
 
 CREATE TABLE qa_message_favorite (

@@ -15,7 +15,7 @@ public class MonitorSqlProvider {
         return buildRequestBase(query)
                 .SELECT("""
                         request_no, question, created_at, request_source, request_status,
-                        answer_summary, total_duration_ms, graph_hit, ai_call_status, exception_flag
+                        final_answer, total_duration_ms, graph_hit, ai_call_status, exception_flag
                         """)
                 .ORDER_BY("created_at DESC, id DESC")
                 .toString() + " LIMIT #{pageSize} OFFSET #{offset}";

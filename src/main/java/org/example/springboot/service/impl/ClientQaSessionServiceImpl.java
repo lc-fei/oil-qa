@@ -114,7 +114,6 @@ public class ClientQaSessionServiceImpl implements ClientQaSessionService {
                         .question(message.getQuestionText())
                         .answer(message.getAnswerText())
                         .partialAnswer(message.getPartialAnswer())
-                        .answerSummary(message.getAnswerSummary())
                         .status(message.getMessageStatus())
                         .streamSequence(message.getStreamSequence())
                         .interruptedReason(message.getInterruptedReason())

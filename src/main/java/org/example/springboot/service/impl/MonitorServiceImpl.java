@@ -27,6 +27,7 @@ import org.example.springboot.service.MonitorService;
 import org.example.springboot.util.GraphJsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import tools.jackson.core.type.TypeReference;
 
 import java.time.LocalDate;
@@ -247,7 +248,7 @@ public class MonitorServiceImpl implements MonitorService {
                 .requestTime(record.getCreatedAt())
                 .requestSource(record.getRequestSource())
                 .requestStatus(record.getRequestStatus())
-                .responseSummary(record.getAnswerSummary())
+                .responseSummary(summarize(record.getFinalAnswer()))
                 .totalDurationMs(record.getTotalDurationMs())
                 .graphHit(intToBool(record.getGraphHit()))
                 .aiCallStatus(record.getAiCallStatus())
@@ -264,7 +265,7 @@ public class MonitorServiceImpl implements MonitorService {
                 .requestStatus(record.getRequestStatus())
                 .totalDurationMs(record.getTotalDurationMs())
                 .finalAnswer(record.getFinalAnswer())
-                .responseSummary(record.getAnswerSummary())
+                .responseSummary(summarize(record.getFinalAnswer()))
                 .graphHit(intToBool(record.getGraphHit()))
                 .exceptionFlag(intToBool(record.getExceptionFlag()))
                 .traceId(record.getTraceId())
@@ -328,6 +329,14 @@ public class MonitorServiceImpl implements MonitorService {
 
     private boolean intToBool(Integer value) {
         return value != null && value == 1;
+    }
+
+    private String summarize(String text) {
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        return normalized.length() > 120 ? normalized.substring(0, 120) : normalized;
     }
 
     private int nullSafeInt(Integer value) {

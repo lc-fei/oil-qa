@@ -39,7 +39,6 @@ public class ClientQaStreamTimeoutTask {
         String status = StringUtils.hasText(partialAnswer) ? "PARTIAL_SUCCESS" : "FAILED";
         LocalDateTime finishedAt = LocalDateTime.now();
         message.setAnswerText(StringUtils.hasText(partialAnswer) ? partialAnswer : "当前回答生成失败，请稍后重试。");
-        message.setAnswerSummary(StringUtils.hasText(partialAnswer) ? summarize(partialAnswer) : "回答生成超时");
         message.setMessageStatus(status);
         message.setInterruptedReason("SERVER_TIMEOUT");
         message.setLastStreamAt(finishedAt);
@@ -50,7 +49,6 @@ public class ClientQaStreamTimeoutTask {
         requestRecord.setRequestNo(message.getRequestNo());
         requestRecord.setRequestStatus(status);
         requestRecord.setFinalAnswer(message.getAnswerText());
-        requestRecord.setAnswerSummary(message.getAnswerSummary());
         requestRecord.setTotalDurationMs(null);
         requestRecord.setGraphHit(0);
         requestRecord.setAiCallStatus("FAILED");
@@ -59,8 +57,4 @@ public class ClientQaStreamTimeoutTask {
         clientQaChatMapper.updateRequestResult(requestRecord);
     }
 
-    private String summarize(String answer) {
-        String normalized = answer.replaceAll("\\s+", " ").trim();
-        return normalized.length() > 120 ? normalized.substring(0, 120) : normalized;
-    }
 }

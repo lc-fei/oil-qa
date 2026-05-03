@@ -21,11 +21,11 @@ public interface ClientQaChatMapper {
 
     @Insert("""
             INSERT INTO qa_message (
-                message_no, session_id, request_no, role, question_text, answer_text, answer_summary,
+                message_no, session_id, request_no, role, question_text, answer_text,
                 partial_answer, message_status, stream_sequence, sequence_no, last_stream_at,
                 interrupted_reason, is_deleted, created_at, finished_at
             ) VALUES (
-                #{messageNo}, #{sessionId}, #{requestNo}, #{role}, #{questionText}, #{answerText}, #{answerSummary},
+                #{messageNo}, #{sessionId}, #{requestNo}, #{role}, #{questionText}, #{answerText},
                 #{partialAnswer}, #{messageStatus}, #{streamSequence}, #{sequenceNo}, #{lastStreamAt},
                 #{interruptedReason}, #{isDeleted}, #{createdAt}, #{finishedAt}
             )
@@ -38,7 +38,6 @@ public interface ClientQaChatMapper {
             SET request_no = #{requestNo},
                 answer_text = #{answerText},
                 partial_answer = #{partialAnswer},
-                answer_summary = #{answerSummary},
                 message_status = #{messageStatus},
                 stream_sequence = #{streamSequence},
                 last_stream_at = #{lastStreamAt},
@@ -61,11 +60,11 @@ public interface ClientQaChatMapper {
     @Insert("""
             INSERT INTO qa_request (
                 request_no, trace_id, user_id, user_account, question, request_source, request_status,
-                final_answer, answer_summary, total_duration_ms, graph_hit, ai_call_status, exception_flag,
+                final_answer, total_duration_ms, graph_hit, ai_call_status, exception_flag,
                 request_uri, request_method, created_at, finished_at
             ) VALUES (
                 #{requestNo}, #{traceId}, #{userId}, #{userAccount}, #{question}, #{requestSource}, #{requestStatus},
-                #{finalAnswer}, #{answerSummary}, #{totalDurationMs}, #{graphHit}, #{aiCallStatus}, #{exceptionFlag},
+                #{finalAnswer}, #{totalDurationMs}, #{graphHit}, #{aiCallStatus}, #{exceptionFlag},
                 #{requestUri}, #{requestMethod}, #{createdAt}, #{finishedAt}
             )
             """)
@@ -76,7 +75,6 @@ public interface ClientQaChatMapper {
             UPDATE qa_request
             SET request_status = #{requestStatus},
                 final_answer = #{finalAnswer},
-                answer_summary = #{answerSummary},
                 total_duration_ms = #{totalDurationMs},
                 graph_hit = #{graphHit},
                 ai_call_status = #{aiCallStatus},
