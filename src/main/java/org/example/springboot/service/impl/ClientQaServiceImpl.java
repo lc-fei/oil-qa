@@ -36,14 +36,13 @@ import org.example.springboot.repository.Neo4jGraphRepository;
 import org.example.springboot.security.AuthContext;
 import org.example.springboot.security.UserPrincipal;
 import org.example.springboot.service.ClientQaService;
-import org.example.springboot.service.qa.AnswerQualityService;
-import org.example.springboot.service.qa.ConversationMemoryContext;
 import org.example.springboot.service.qa.ConversationMemoryService;
 import org.example.springboot.service.qa.QaEvidenceRankerService;
 import org.example.springboot.service.qa.QaGenerationResult;
 import org.example.springboot.service.qa.QaGraphRetrievalService;
 import org.example.springboot.service.qa.QaOrchestrationArchiveService;
 import org.example.springboot.service.qa.QaOrchestrationContext;
+import org.example.springboot.service.qa.QaPromptTemplateService;
 import org.example.springboot.service.qa.QaOrchestrationSupport;
 import org.example.springboot.service.qa.QaPipelineStage;
 import org.example.springboot.service.qa.QaPlannerService;
@@ -51,7 +50,6 @@ import org.example.springboot.service.qa.QaPlanningResult;
 import org.example.springboot.service.qa.QaRankingResult;
 import org.example.springboot.service.qa.QaStageTrace;
 import org.example.springboot.service.qa.QaToolCallTrace;
-import org.example.springboot.service.qa.QaQualityResult;
 import org.example.springboot.service.qa.QuestionUnderstandingResult;
 import org.example.springboot.service.qa.QuestionUnderstandingService;
 import org.example.springboot.util.GraphJsonUtils;
@@ -88,7 +86,7 @@ import java.util.function.Consumer;
  *
  * <p>核心职责不是单纯调用大模型，而是把一次 QA 请求完整编排为：
  * 认证与会话确认 -> PROCESSING 消息创建 -> 问题理解 -> 任务规划 -> 知识检索 ->
- * 证据排序 -> Prompt 构建 -> 答案生成 -> 质量校验 -> 消息/监控/归档落库。
+ * 证据排序 -> Prompt 构建 -> 答案生成 -> 消息/监控/归档落库。
  *
  * <p>非流式接口和 SSE 流式接口共享同一套业务阶段；差异在于流式接口会把阶段状态、
  * 工具调用和模型增量文本实时推送给客户端。
@@ -111,10 +109,10 @@ public class ClientQaServiceImpl implements ClientQaService {
     private final QaPlannerService qaPlannerService;
     private final QaGraphRetrievalService qaGraphRetrievalService;
     private final QaEvidenceRankerService qaEvidenceRankerService;
-    private final AnswerQualityService answerQualityService;
     private final QaOrchestrationArchiveService qaOrchestrationArchiveService;
     private final QaOrchestrationSupport qaOrchestrationSupport;
     private final ConversationMemoryService conversationMemoryService;
+    private final QaPromptTemplateService promptTemplateService;
 
     @Override
     public ClientChatResponse chat(ClientChatRequest request) {
@@ -220,7 +218,7 @@ public class ClientQaServiceImpl implements ClientQaService {
 
             // Prompt 汇总图谱依据、历史上下文和原始问题，后续 evidence 会复用 prompt 摘要作为来源说明。
             long promptStartedAt = System.currentTimeMillis();
-            String prompt = buildPrompt(question, request, session.getId(), graphResult, orchestrationContext);
+            String prompt = buildPrompt(question, request, graphResult, orchestrationContext);
             promptDurationMs = elapsed(promptStartedAt);
             clientQaChatMapper.insertPrompt(buildPromptRecord(requestNo, question, prompt, graphResult, promptDurationMs));
 
@@ -228,8 +226,7 @@ public class ClientQaServiceImpl implements ClientQaService {
             /*
              * 阶段 5：答案生成。
              *
-             * 非流式接口一次性等待模型完整返回。这里不启用 JSON Mode，因为主回答需要自然语言；
-             * 结构化输出只放在问题理解和质量校验等内部阶段。
+             * 非流式接口一次性等待模型完整返回。这里不启用 JSON Mode，因为主回答需要自然语言。
              */
             QaStageTrace generationStage = qaOrchestrationSupport.startStage(orchestrationContext, QaPipelineStage.GENERATION);
             aiStartedAt = System.currentTimeMillis();
@@ -246,18 +243,6 @@ public class ClientQaServiceImpl implements ClientQaService {
             qaOrchestrationSupport.completeStage(orchestrationContext, generationStage, "答案生成完成");
             qaOrchestrationArchiveService.updateTrace(orchestrationContext);
             clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, aiDurationMs, aiStatusCode, answer, null));
-
-            /*
-             * 阶段 6：质量校验。
-             *
-             * 质量校验关注回答是否覆盖用户问题、是否引用或尊重证据、是否存在幻觉风险、
-             * 是否需要降级或追问。校验失败不直接丢弃已有回答，而是归档风险信息。
-             */
-            QaStageTrace qualityStage = qaOrchestrationSupport.startStage(orchestrationContext, QaPipelineStage.QUALITY_CHECK);
-            QaQualityResult quality = answerQualityService.validate(orchestrationContext, answer);
-            orchestrationContext.setQuality(quality);
-            qaOrchestrationSupport.completeStage(orchestrationContext, qualityStage, quality.getReviewNotes());
-            qaOrchestrationArchiveService.updateTrace(orchestrationContext);
         } catch (Exception ex) {
             // 主链路任一阶段失败都要闭合监控记录，避免管理端出现长期 PROCESSING 的脏数据。
             if (aiStartedAt > 0L && aiDurationMs == 0) {
@@ -480,7 +465,7 @@ public class ClientQaServiceImpl implements ClientQaService {
             sendStageSse(emitter, requestNo, session, message, rankingStage, orchestrationContext);
 
             long promptStartedAt = System.currentTimeMillis();
-            String prompt = buildPrompt(question, request, session.getId(), graphResult, orchestrationContext);
+            String prompt = buildPrompt(question, request, graphResult, orchestrationContext);
             promptDurationMs = elapsed(promptStartedAt);
             clientQaChatMapper.insertPrompt(buildPromptRecord(requestNo, question, prompt, graphResult, promptDurationMs));
 
@@ -533,21 +518,7 @@ public class ClientQaServiceImpl implements ClientQaService {
             clientQaChatMapper.insertAiCall(buildAiRecord(requestNo, aiDurationMs, aiStatusCode, answer, null));
 
             /*
-             * 流式阶段 6：质量校验。
-             *
-             * 注意：模型正文 chunk 已经发送完，但 done 还不能发送。
-             * 需要等待质量校验和最终归档完成，才能让 SDK 做最终状态归并。
-             */
-            QaStageTrace qualityStage = qaOrchestrationSupport.startStage(orchestrationContext, QaPipelineStage.QUALITY_CHECK);
-            sendStageSse(emitter, requestNo, session, message, qualityStage, orchestrationContext);
-            QaQualityResult quality = answerQualityService.validate(orchestrationContext, answer);
-            orchestrationContext.setQuality(quality);
-            qaOrchestrationSupport.completeStage(orchestrationContext, qualityStage, quality.getReviewNotes());
-            qaOrchestrationArchiveService.updateTrace(orchestrationContext);
-            sendStageSse(emitter, requestNo, session, message, qualityStage, orchestrationContext);
-
-            /*
-             * 流式阶段 7：归档与 done。
+             * 流式阶段 6：归档与 done。
              *
              * done 事件必须携带完整 result 和 workflow。客户端平台层收到 done 后，
              * 再通知 Rust SDK 执行 chat.stream.finish，统一刷新会话列表和消息状态。
@@ -1138,110 +1109,11 @@ public class ClientQaServiceImpl implements ClientQaService {
         return record;
     }
 
-    private String buildPrompt(String question, ClientChatRequest request, Long sessionId, Map<String, Object> graphResult) {
-        return buildPrompt(question, request, sessionId, graphResult, null);
-    }
-
     private String buildPrompt(String question,
                                ClientChatRequest request,
-                               Long sessionId,
                                Map<String, Object> graphResult,
                                QaOrchestrationContext orchestrationContext) {
-        /*
-         * Prompt 构建是生成质量的核心控制点。
-         *
-         * GRAPH_ENHANCED 模式会显式注入图谱事实和排序证据；LLM_ONLY 模式不强制模型引用图谱。
-         * contextMode=ON 时只拼接最近几轮历史，避免长会话把无关上下文带入当前回答。
-         */
-        StringBuilder builder = new StringBuilder();
-        if ("LLM_ONLY".equalsIgnoreCase(request.getAnswerMode())) {
-            builder.append("本次回答模式：仅基于通用模型能力回答，不强制依赖图谱事实。\n");
-        } else {
-            // 图谱增强模式把检索结果显式写入 Prompt，引导模型优先依据结构化事实回答。
-            builder.append("已检索到的图谱依据：\n");
-            appendGraphFacts(builder, graphResult);
-        }
-        appendPlannerAndRankedEvidence(builder, orchestrationContext);
-        if ("ON".equalsIgnoreCase(request.getContextMode())) {
-            // 会话记忆使用“滚动摘要 + 待摘要溢出轮次 + 最近 2 轮原文”，避免长会话全量拼接。
-            appendConversationMemory(builder, orchestrationContext == null ? null : orchestrationContext.getConversationMemory());
-        }
-        builder.append("\n用户问题：").append(question).append("\n");
-        builder.append("请使用中文回答，并在依据不足时明确说明不确定性。");
-        return builder.toString();
-    }
-
-    private void appendConversationMemory(StringBuilder builder, ConversationMemoryContext memory) {
-        if (memory == null || !Boolean.TRUE.equals(memory.getEnabled()) || !StringUtils.hasText(memory.getMemoryText())) {
-            return;
-        }
-        builder.append("\n会话记忆：\n").append(memory.getMemoryText()).append("\n");
-    }
-
-    private void appendPlannerAndRankedEvidence(StringBuilder builder, QaOrchestrationContext orchestrationContext) {
-        // 把 planner 与 ranker 结果写入 Prompt，让模型知道应按什么执行顺序和证据优先级回答。
-        if (orchestrationContext == null) {
-            return;
-        }
-        if (orchestrationContext.getPlanning() != null) {
-            builder.append("\n任务规划：").append(orchestrationContext.getPlanning().getPlanningSummary()).append("\n");
-            builder.append("执行顺序：").append(String.join(" -> ", orchestrationContext.getPlanning().getExecutionOrder())).append("\n");
-        }
-        if (orchestrationContext.getRanking() != null && orchestrationContext.getRanking().getRankedEvidence() != null) {
-            builder.append("\n排序后的证据摘要：\n");
-            orchestrationContext.getRanking().getRankedEvidence().stream().limit(6).forEach(item -> {
-                builder.append("- [").append(item.getSourceType()).append("] ").append(item.getTitle());
-                if (StringUtils.hasText(item.getContent())) {
-                    builder.append("：").append(item.getContent());
-                }
-                builder.append("\n");
-            });
-        }
-    }
-
-    private void appendGraphFacts(StringBuilder builder, Map<String, Object> graphResult) {
-        // 图谱事实以人类可读的实体/关系文本进入 Prompt，减少模型理解结构化 JSON 的负担。
-        List<GraphEntityRecord> entities = (List<GraphEntityRecord>) graphResult.get("entities");
-        List<GraphRelationRecord> relations = (List<GraphRelationRecord>) graphResult.get("relations");
-        if (entities.isEmpty() && relations.isEmpty()) {
-            builder.append("- 未命中明确图谱事实。\n");
-            return;
-        }
-        for (GraphEntityRecord entity : entities) {
-            builder.append("- 实体：").append(entity.getName());
-            if (StringUtils.hasText(entity.getTypeName())) {
-                builder.append("（").append(entity.getTypeName()).append("）");
-            }
-            if (StringUtils.hasText(entity.getDescription())) {
-                builder.append("，说明：").append(entity.getDescription());
-            }
-            builder.append("\n");
-        }
-        for (GraphRelationRecord relation : relations) {
-            builder.append("- 关系：")
-                    .append(relation.getSourceEntityName())
-                    .append(" -[")
-                    .append(relation.getRelationTypeName())
-                    .append("]-> ")
-                    .append(relation.getTargetEntityName());
-            if (StringUtils.hasText(relation.getDescription())) {
-                builder.append("，说明：").append(relation.getDescription());
-            }
-            builder.append("\n");
-        }
-    }
-
-    private void appendConversationHistory(StringBuilder builder, Long sessionId) {
-        // 只追加最近 3 条问答，平衡追问理解和 Prompt 长度控制。
-        List<QaMessage> history = clientQaMessageMapper.findBySessionId(sessionId);
-        int start = Math.max(0, history.size() - 3);
-        for (int i = start; i < history.size(); i++) {
-            QaMessage message = history.get(i);
-            builder.append("- 用户：").append(message.getQuestionText()).append("\n");
-            if (StringUtils.hasText(message.getAnswerText())) {
-                builder.append("- 助手：").append(message.getAnswerText()).append("\n");
-            }
-        }
+        return promptTemplateService.answerGenerationPrompt(question, request, graphResult, orchestrationContext);
     }
 
     private MonitorPromptRecord buildPromptRecord(String requestNo, String question, String prompt, Map<String, Object> graphResult, int durationMs) {

@@ -13,7 +13,6 @@ public enum QaPipelineStage {
     RETRIEVAL("RETRIEVAL", "知识检索"),
     RANKING("RANKING", "证据融合排序"),
     GENERATION("GENERATION", "答案生成"),
-    QUALITY_CHECK("QUALITY_CHECK", "质量校验"),
     ARCHIVING("ARCHIVING", "结果归档");
 
     private final String code;

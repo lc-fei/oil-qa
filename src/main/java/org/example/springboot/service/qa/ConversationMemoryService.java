@@ -40,6 +40,7 @@ public class ConversationMemoryService {
     private final QaSessionMemoryMapper qaSessionMemoryMapper;
     private final ClientQaMessageMapper clientQaMessageMapper;
     private final BailianModelClient bailianModelClient;
+    private final QaPromptTemplateService promptTemplateService;
 
     public ConversationMemoryContext buildMemoryContext(Long sessionId, Long userId, String contextMode) {
         if (!"ON".equalsIgnoreCase(contextMode)) {
@@ -169,33 +170,11 @@ public class ConversationMemoryService {
     private ConversationMemorySummary summarize(QaSessionMemory memory,
                                                 ConversationMemoryKeys keys,
                                                 List<QaMessage> overflowMessages) throws Exception {
-        String systemPrompt = """
-                你是油井工程问答系统的会话记忆压缩器。请只返回 JSON 对象，不要输出 Markdown。
-                只总结当前会话内已经发生的问答，不要编造跨会话用户画像。
-                userPreferences 只能记录用户在当前会话中明确表达的偏好。
-                """;
-        String userPrompt = """
-                请基于旧摘要、旧记忆 key 和本次待摘要问答，生成新的会话记忆 JSON。
-                JSON 字段固定为：
-                summary: string，300字以内，保留对后续追问有用的背景、结论和上下文；
-                currentTopic: string；
-                keyEntities: string[]；
-                userPreferences: string[]；
-                constraints: string[]；
-                openQuestions: string[]；
-                lastIntent: string；
-                summaryNotes: string。
-
-                旧摘要：
-                %s
-
-                旧记忆 key：
-                %s
-
-                待摘要问答：
-                %s
-                """.formatted(defaultString(memory.getSummary()), toJson(keys), buildTurnsForSummary(overflowMessages));
-        String content = bailianModelClient.chat(systemPrompt, userPrompt, true);
+        String content = bailianModelClient.chat(
+                promptTemplateService.memorySummarySystemPrompt(),
+                promptTemplateService.memorySummaryUserPrompt(memory.getSummary(), toJson(keys), buildTurnsForSummary(overflowMessages)),
+                true
+        );
         JsonNode root = JSON_MAPPER.readTree(content);
         ConversationMemoryKeys newKeys = ConversationMemoryKeys.builder()
                 .currentTopic(root.path("currentTopic").asText(keys.getCurrentTopic()))

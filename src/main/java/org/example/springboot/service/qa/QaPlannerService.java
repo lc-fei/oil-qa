@@ -22,7 +22,6 @@ public class QaPlannerService {
         order.add("graph_search");
         order.add("evidence_ranking");
         order.add("answer_generation");
-        order.add("quality_check");
         return QaPlanningResult.builder()
                 .graphRequired(graphRequired)
                 .toolRequired(graphRequired)

@@ -22,10 +22,15 @@ public class QuestionUnderstandingService {
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
 
     private final BailianModelClient bailianModelClient;
+    private final QaPromptTemplateService promptTemplateService;
 
     public QuestionUnderstandingResult understand(String question, String contextText) {
         try {
-            String content = bailianModelClient.chat(systemPrompt(), userPrompt(question, contextText), true);
+            String content = bailianModelClient.chat(
+                    promptTemplateService.questionUnderstandingSystemPrompt(),
+                    promptTemplateService.questionUnderstandingUserPrompt(question, contextText),
+                    true
+            );
             QuestionUnderstandingResult result = parseResult(content, question);
             validate(result);
             return result;
@@ -92,21 +97,6 @@ public class QuestionUnderstandingService {
             tokens.add(normalized.substring(0, Math.min(6, normalized.length())));
         }
         return new ArrayList<>(tokens).subList(0, Math.min(tokens.size(), 8));
-    }
-
-    private String systemPrompt() {
-        return """
-                你是油井工程智能问答系统的问题理解模块。必须只返回合法 JSON，不要输出 Markdown。
-                JSON 字段包括 rewrittenQuestion、cleanedContext、standardTerms、expandedQueries、intent、entities、complexity、confidence、reasoningSummary。
-                """;
-    }
-
-    private String userPrompt(String question, String contextText) {
-        return """
-                请对以下问题做结构化理解，并返回 JSON。
-                原始问题：%s
-                历史上下文：%s
-                """.formatted(question, StringUtils.hasText(contextText) ? contextText : "无");
     }
 
     private String stringValue(Object value, String defaultValue) {

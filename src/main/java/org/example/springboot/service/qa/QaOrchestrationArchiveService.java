@@ -89,7 +89,8 @@ public class QaOrchestrationArchiveService {
         trace.setEvidenceJson(toJson(context.getEvidenceItems()));
         trace.setRankingJson(toJson(context.getRanking()));
         trace.setGenerationJson(toJson(context.getGeneration()));
-        trace.setQualityJson(toJson(context.getQuality()));
+        // 同步质检阶段已移出用户端主链路，历史字段保留为空对象以兼容既有归档表结构。
+        trace.setQualityJson("{}");
         trace.setMemoryJson(toJson(context.getConversationMemory()));
         trace.setTimingsJson(toJson(context.getTimings()));
         trace.setErrorMessage(trim(context.getErrorMessage(), 1000));
